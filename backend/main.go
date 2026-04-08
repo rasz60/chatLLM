@@ -9,14 +9,15 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	openai "github.com/sashabaranov/go-openai"
 )
 
 // 환경 변수 저장
 var (
-	dbURL       = os.Getenv("DATABASE_URL")
-	openaiKey   = os.Getenv("OPENAI_API_KEY")
-	db          *sql.DB
+	dbURL        string
+	openaiKey    string
+	db           *sql.DB
 	openaiClient *openai.Client
 )
 
@@ -40,11 +41,31 @@ type ChatResponse struct {
 
 // 초기화 함수
 func init() {
-	// PostgreSQL 데이터베이스 연결
-	var err error
-	db, err = sql.Open("postgres", dbURL)
+	// .env 파일 로드
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("DB 연결 실패:", err)
+		log.Println("⚠️ .env 파일 로드 실패:", err)
+	} else {
+		log.Println("✓ .env 파일 로드 성공")
+	}
+
+	// 환경 변수 읽기 (이제 .env가 로드된 후!!)
+	dbURL = os.Getenv("DATABASE_URL")
+	openaiKey = os.Getenv("OPENAI_API_KEY")
+
+	// 디버깅
+	log.Printf("📝 DATABASE_URL: %s", dbURL)
+	if openaiKey != "" && len(openaiKey) > 5 {
+		log.Printf("📝 OPENAI_API_KEY: %s...", openaiKey[:5])
+	} else {
+		log.Printf("⚠️ OPENAI_API_KEY 없음")
+	}
+
+	// PostgreSQL 데이터베이스 연결
+	var dberr error
+	db, dberr = sql.Open("postgres", dbURL)
+	if dberr != nil {
+		log.Fatal("DB 연결 실패:", dberr)
 	}
 
 	// 연결 테스트
