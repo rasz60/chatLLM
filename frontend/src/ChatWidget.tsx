@@ -12,6 +12,8 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -56,7 +58,13 @@ export default function ChatWidget() {
           role: m.type === 'user' ? 'user' : 'assistant',
           content: m.content,
         })),
+        session_id: sessionId ?? '',
       });
+
+      // 첫 응답에서 session_id 저장
+      if (!sessionId && response.data.session_id) {
+        setSessionId(response.data.session_id);
+      }
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -79,49 +87,71 @@ export default function ChatWidget() {
   };
 
   return (
-    <div className="chat-widget">
+    <div className={`chat-widget ${isMinimized ? 'minimized' : ''}`}>
       <div className="chat-header">
-        <h2>AI 챗봇</h2>
+        <div className="chat-header-content">
+          <div
+            className="chat-logo"
+            onClick={() => isMinimized && setIsMinimized(false)}
+            style={isMinimized ? { cursor: 'pointer' } : {}}
+          >
+            <span className="logo-icon">🤖</span>
+            <span className="logo-text">{isMinimized ? '' : 'Chat❓Chat❗'}</span>
+          </div>
+          <div className="chat-header-buttons">
+            <button
+              className="header-btn minimize-btn"
+              onClick={() => setIsMinimized(!isMinimized)}
+              title={isMinimized ? '최대화' : '최소화'}
+            >
+              {isMinimized ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="chat-empty">
-            <p>안녕하세요! 무엇을 도와드릴까요?</p>
+      {!isMinimized && (
+        <>
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <div className="chat-empty">
+                <p>안녕하세요! 무엇을 도와드릴까요?</p>
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <div key={msg.id} className={`message ${msg.type}`}>
+                  <div className="message-bubble">{msg.content}</div>
+                </div>
+              ))
+            )}
+            {loading && (
+              <div className="message bot">
+                <div className="message-bubble loading">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className={`message ${msg.type}`}>
-              <div className="message-bubble">{msg.content}</div>
-            </div>
-          ))
-        )}
-        {loading && (
-          <div className="message bot">
-            <div className="message-bubble loading">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      <div className="chat-input-area">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="메시지 입력... (Shift+Enter: 줄바꿈)"
-          disabled={loading}
-          rows={1}
-        />
-        <button onClick={handleSend} disabled={loading || !input.trim()}>
-          {loading ? '...' : '전송'}
-        </button>
-      </div>
+          <div className="chat-input-area">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="메시지 입력... (Shift+Enter: 줄바꿈)"
+              disabled={loading}
+              rows={1}
+            />
+            <button onClick={handleSend} disabled={loading || !input.trim()}>
+              {loading ? '...' : '전송'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

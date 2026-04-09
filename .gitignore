@@ -1,0 +1,3 @@
+# chatchat/ .gitignore
+.env
+node_modules/

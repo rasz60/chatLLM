@@ -1,0 +1,238 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  background-color: #f9f9f9;
+}
+
+/* ==================== 헤더 ==================== */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: rgba(247, 165, 1, .55);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  transition: transform 0.3s ease;
+  border-bottom: 1px solid #ffe66d;
+}
+
+.header.hidden {
+  transform: translateY(-100%);
+}
+
+.header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #333;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.logo {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.logo-icon {
+  font-size: 48px;
+  background: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(255, 230, 109, 0.3);
+  cursor: pointer;
+}
+
+.logo-icon img {
+  width: 100%;
+}
+
+.header-spacer {
+  width: 44px;
+}
+
+/* ==================== 메뉴 드롭다운 ==================== */
+.menu-dropdown {
+  position: fixed;
+  top: 80px;
+  left: 0;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 999;
+  animation: slideDown 0.3s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-dropdown ul {
+  list-style: none;
+  padding: 16px 0;
+}
+
+.menu-dropdown li {
+  padding: 0;
+}
+
+.menu-dropdown a {
+  display: block;
+  padding: 12px 24px;
+  color: #333;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.menu-dropdown a:hover {
+  background: #f9f9f9;
+  color: #ffe66d;
+}
+
+/* ==================== 메인 콘텐츠 ==================== */
+.main-content {
+  margin-top: 80px;
+  min-height: calc(100vh - 80px);
+  background: linear-gradient(180deg, #f9f9f9 0%, #ffffff 100%);
+}
+
+/* ==================== 플로팅 버튼 ==================== */
+.floating-btn {
+  position: fixed;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #ffe66d 0%, #fff4d6 100%);
+  color: #333;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 230, 109, 0.3);
+  transition: all 0.3s ease;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #fff9e6;
+}
+
+.floating-btn:hover {
+  background: linear-gradient(135deg, #ffda47 0%, #ffe88e 100%);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(255, 230, 109, 0.4);
+}
+
+/* 좌측 상단 - 메뉴 */
+.menu-floating {
+  top: 100px;
+  left: 20px;
+  animation: floatIn 0.3s ease;
+}
+
+/* 우측 상단 - 홈 */
+.home-floating {
+  top: 100px;
+  right: 20px;
+  animation: floatIn 0.3s ease;
+}
+
+/* 좌측 하단 - 최상위 */
+.top-floating {
+  bottom: 20px;
+  left: 20px;
+  animation: floatIn 0.3s ease;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ==================== 반응형 ==================== */
+@media (max-width: 768px) {
+  .header {
+    height: 70px;
+    padding: 0 16px;
+  }
+
+  .logo-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 32px;
+  }
+
+  .header-spacer {
+    width: 36px;
+  }
+
+  .main-content {
+    margin-top: 70px;
+  }
+
+  .floating-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+
+  .menu-floating {
+    top: 90px;
+    left: 16px;
+  }
+
+  .home-floating {
+    top: 90px;
+    right: 16px;
+  }
+
+  .top-floating {
+    bottom: 16px;
+    left: 16px;
+  }
+}
+
