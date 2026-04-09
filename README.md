@@ -5,10 +5,11 @@ Go 백엔드, React + TypeScript 프론트엔드, Ollama 로컬 LLM, Supabase pg
 ## 기능
 
 - **Go 백엔드**: 패키지 구조로 분리된 고성능 서버
-- **RAG (Retrieval-Augmented Generation)**: 회사 내규 문서를 벡터 검색으로 참조하여 답변
-- **로컬 LLM**: Ollama를 통한 완전 로컬 AI 추론 (인터넷 불필요)
+- **RAG**: 회사 내규 문서를 pgvector 코사인 유사도 검색으로 참조하여 답변
+- **언어별 모델 라우팅**: 한국어 입력 → 한국어 특화 모델, 영어 입력 → 영어 모델 자동 전환
+- **완전 로컬 AI**: Ollama를 통한 오프라인 추론 (인터넷 불필요)
 - **Supabase PostgreSQL + pgvector**: 채팅 히스토리 저장 + 벡터 유사도 검색
-- **세션 관리**: session_id 기반으로 대화 흐름 추적 및 중복 저장 방지
+- **세션 관리**: session_id 기반으로 대화 흐름 추적, 중복 저장 방지
 - **임베디드 챗 위젯**: 어느 웹사이트에나 통합 가능한 React 컴포넌트
 
 ---
@@ -21,7 +22,7 @@ chatchat/
 │   ├── src/
 │   │   ├── App.tsx             # 메인 앱 (헤더, 플로팅 버튼)
 │   │   ├── App.css
-│   │   ├── ChatWidget.tsx      # 챗봇 위젯 컴포넌트
+│   │   ├── ChatWidget.tsx      # 챗봇 위젯 컴포넌트 (session_id 관리)
 │   │   ├── ChatWidget.css
 │   │   └── main.tsx            # 엔트리 포인트
 │   ├── package.json
@@ -37,8 +38,8 @@ chatchat/
     ├── models/
     │   └── types.go            # 공용 구조체 (Message, ChatRequest, ChatResponse)
     ├── services/
-    │   ├── llm.go              # Ollama 채팅 + 임베딩 API 호출
-    │   └── search.go           # 벡터 검색 (폴백: 키워드 검색)
+    │   ├── llm.go              # 언어 감지 + 모델 라우팅 + Ollama API 호출
+    │   └── search.go           # 벡터 검색 (폴백: 키워드 ILIKE 검색)
     ├── handlers/
     │   └── chat.go             # HTTP 핸들러 (/api/chat, /health)
     ├── middleware/
@@ -62,11 +63,15 @@ React (ChatWidget)
   │  { message, chat_history, session_id }
   ▼
 Go 백엔드 (handlers/chat.go)
+  │
   ├─► SearchService (services/search.go)
-  │     └─► Ollama /api/embed  →  pgvector 코사인 유사도 검색
+  │     └─► Ollama /api/embed → pgvector 코사인 유사도 검색
   │           (임베딩 실패 시 ILIKE 키워드 검색으로 폴백)
   │
   └─► LLMService (services/llm.go)
+        ├─► 언어 감지 (한글 유니코드 포함 여부)
+        │     ├── 한국어 → CHAT_MODEL_KO (예: qwen2.5:7b)
+        │     └── 영어   → CHAT_MODEL_EN (예: llama3.2)
         └─► Ollama /v1/chat/completions
               └─► 시스템 프롬프트에 검색된 문서 주입 (RAG)
   │
@@ -94,12 +99,17 @@ Supabase PostgreSQL
 ### 1. Ollama 모델 설치
 
 ```bash
-# 채팅 모델
+# 한국어 채팅 모델
+ollama pull qwen2.5:7b
+
+# 영어 채팅 모델
 ollama pull llama3.2
 
 # 임베딩 모델 (RAG용)
 ollama pull nomic-embed-text
 ```
+
+> 모델 용량: qwen2.5:7b ≈ 4.7GB / llama3.2 ≈ 2GB / nomic-embed-text ≈ 274MB
 
 ### 2. Supabase 스키마 설정
 
@@ -122,9 +132,9 @@ CREATE INDEX IF NOT EXISTS idx_documents_embedding
     ON documents USING ivfflat (embedding vector_cosine_ops);
 ```
 
-conversations, messages 테이블은 백엔드 시작 시 자동 생성됩니다.
+> `conversations`, `messages` 테이블은 백엔드 시작 시 자동 생성됩니다.
 
-### 3. 백엔드 환경변수 설정
+### 3. 환경변수 설정
 
 ```bash
 cd backend
@@ -133,10 +143,16 @@ cp .env.example .env
 
 `.env` 내용:
 ```env
+# PostgreSQL 연결 문자열 (Supabase)
 DATABASE_URL=postgresql://user:password@host:5432/postgres
+
+# Ollama 설정
 OLLAMA_BASE_URL=http://localhost:11434
-CHAT_MODEL=llama3.2
+CHAT_MODEL_KO=qwen2.5:7b        # 한국어 질문에 사용할 모델
+CHAT_MODEL_EN=llama3.2           # 영어 질문에 사용할 모델
 EMBEDDING_MODEL=nomic-embed-text
+
+# 서버 포트
 PORT=:8000
 ```
 
@@ -145,14 +161,15 @@ PORT=:8000
 ```bash
 cd backend
 
-# 의존성 설치
+# Python 의존성 설치
 pip install python-docx pdfplumber psycopg2 requests python-dotenv
 
 # 문서 업로드 (PDF/DOCX → 청킹 → 임베딩 → Supabase 저장)
 python upload_documents.py
 ```
 
-업로드 대상 경로는 `.env`의 `DOCUMENT_DIR`로 설정 (기본값: `C:\Users\devsi\Documents\rule`).
+- 업로드 대상 경로는 `.env`의 `DOCUMENT_DIR`로 변경 가능 (기본값: `C:\Users\devsi\Documents\rule`)
+- 이미 업로드된 문서가 있고 임베딩이 NULL인 경우, `DELETE FROM documents;` 후 재업로드 필요
 
 ### 5. 백엔드 실행
 
@@ -192,8 +209,8 @@ npm run dev
 }
 ```
 
-- `session_id`: 첫 요청 시 빈 문자열로 보내면 서버가 새로 생성하여 응답에 포함
-- 이후 요청부터 받은 `session_id`를 포함하여 전송
+- `session_id`: 첫 요청 시 빈 문자열 전송 → 서버가 신규 생성 후 응답에 포함
+- 이후 요청부터 응답받은 `session_id`를 그대로 포함하여 전송
 
 **응답:**
 ```json
