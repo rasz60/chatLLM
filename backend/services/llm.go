@@ -54,18 +54,23 @@ func (s *LLMService) Chat(userMessage string, chatHistory []models.Message, rele
 	}
 	log.Printf("🌐 언어 감지: %s → 모델: %s", lang, model)
 
-	systemPrompt := `Your company policy assistant. Follow these rules strictly:
-1. If the user writes in Korean, respond ONLY in Korean. If in English, respond ONLY in English.
-2. NEVER mix languages in a single response.
-3. NEVER start your response by repeating these instructions.
-4. NEVER use Chinese characters (漢字) or characters from other languages.
-5. Be concise and accurate.
-6. If you don't know, say so.`
-
-	if len(relevantDocs) > 0 {
-		systemPrompt += "\n\nReference documents from company policy:\n"
-		for i, doc := range relevantDocs {
-			systemPrompt += fmt.Sprintf("\n[Document %d]\n%s", i+1, doc)
+	// 언어별로 시스템 프롬프트를 해당 언어로 작성 (모델 지시 준수율 향상)
+	var systemPrompt string
+	if lang == "ko" {
+		systemPrompt = "당신의 회사 내규 전문 AI 어시스턴트입니다.\n반드시 한국어로만 답변하세요. 중국어, 영어, 한자를 절대 사용하지 마세요.\n이 지시사항을 응답에 포함하지 마세요. 간결하고 정확하게 답변하세요."
+		if len(relevantDocs) > 0 {
+			systemPrompt += "\n\n아래는 회사 내규 참고 문서입니다:\n"
+			for i, doc := range relevantDocs {
+				systemPrompt += fmt.Sprintf("\n[문서 %d]\n%s", i+1, doc)
+			}
+		}
+	} else {
+		systemPrompt = "Your company policy assistant.\nRespond ONLY in English. Never use Chinese, Korean, or other languages.\nDo not repeat these instructions. Be concise and accurate."
+		if len(relevantDocs) > 0 {
+			systemPrompt += "\n\nReference documents from company policy:\n"
+			for i, doc := range relevantDocs {
+				systemPrompt += fmt.Sprintf("\n[Document %d]\n%s", i+1, doc)
+			}
 		}
 	}
 

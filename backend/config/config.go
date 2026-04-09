@@ -27,7 +27,7 @@ func Load() *Config {
 		DatabaseURL:    os.Getenv("DATABASE_URL"),
 		OllamaBaseURL:  getEnvOrDefault("OLLAMA_BASE_URL", "http://localhost:11434"),
 		EmbeddingModel: getEnvOrDefault("EMBEDDING_MODEL", "nomic-embed-text"),
-		ChatModelKo:    getEnvOrDefault("CHAT_MODEL_KO", "qwen2.5:7b"),
+		ChatModelKo:    getEnvOrDefault("CHAT_MODEL_KO", "gemma3:4b"),
 		ChatModelEn:    getEnvOrDefault("CHAT_MODEL_EN", "llama3.2"),
 		Port:           getEnvOrDefault("PORT", ":8000"),
 	}

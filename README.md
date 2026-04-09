@@ -70,8 +70,8 @@ Go 백엔드 (handlers/chat.go)
   │
   └─► LLMService (services/llm.go)
         ├─► 언어 감지 (한글 유니코드 포함 여부)
-        │     ├── 한국어 → CHAT_MODEL_KO (예: qwen2.5:7b)
-        │     └── 영어   → CHAT_MODEL_EN (예: llama3.2)
+        │     ├── 한국어 → CHAT_MODEL_KO (gemma3:4b) + 한국어 시스템 프롬프트
+        │     └── 영어   → CHAT_MODEL_EN (llama3.2)  + 영어 시스템 프롬프트
         └─► Ollama /v1/chat/completions
               └─► 시스템 프롬프트에 검색된 문서 주입 (RAG)
   │
@@ -99,8 +99,8 @@ Supabase PostgreSQL
 ### 1. Ollama 모델 설치
 
 ```bash
-# 한국어 채팅 모델
-ollama pull qwen2.5:7b
+# 한국어 채팅 모델 (gemma3:4b 권장 — 한국어 지시 준수율 높음)
+ollama pull gemma3:4b
 
 # 영어 채팅 모델
 ollama pull llama3.2
@@ -109,7 +109,9 @@ ollama pull llama3.2
 ollama pull nomic-embed-text
 ```
 
-> 모델 용량: qwen2.5:7b ≈ 4.7GB / llama3.2 ≈ 2GB / nomic-embed-text ≈ 274MB
+> 모델 용량: gemma3:4b ≈ 3.3GB / llama3.2 ≈ 2GB / nomic-embed-text ≈ 274MB
+
+> qwen2.5는 중국 모델로 한국어 입력 시 중국어로 응답하는 문제가 있어 사용하지 않습니다.
 
 ### 2. Supabase 스키마 설정
 
@@ -148,7 +150,7 @@ DATABASE_URL=postgresql://user:password@host:5432/postgres
 
 # Ollama 설정
 OLLAMA_BASE_URL=http://localhost:11434
-CHAT_MODEL_KO=qwen2.5:7b        # 한국어 질문에 사용할 모델
+CHAT_MODEL_KO=gemma3:4b          # 한국어 질문에 사용할 모델
 CHAT_MODEL_EN=llama3.2           # 영어 질문에 사용할 모델
 EMBEDDING_MODEL=nomic-embed-text
 

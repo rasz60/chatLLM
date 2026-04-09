@@ -22,7 +22,7 @@ export default function App() {
           </button>
           <div className="logo">
             <span className="logo-icon" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              🤖
+              <img src="https://avatars.githubusercontent.com/u/96821067?v=4" alt="Chat❓Chat❗" />
             </span>
           </div>
           <div className="header-spacer"></div>
