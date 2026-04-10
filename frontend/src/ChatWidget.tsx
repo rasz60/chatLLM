@@ -87,12 +87,24 @@ export default function ChatWidget() {
   };
 
   return (
-    <div className={`chat-widget ${isMinimized ? 'minimized' : ''}`}>
-      <div className="chat-header">
+    <div className="chat-widget-wrapper">
+      {isMinimized && loading && (
+        <div className="minimized-loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      )}
+      <div className={`chat-widget ${isMinimized ? 'minimized' : ''}`}>
+      <div
+        className="chat-header"
+        onClick={() => !isMinimized && setIsMinimized(true)}
+        style={!isMinimized ? { cursor: 'pointer' } : {}}
+      >
         <div className="chat-header-content">
           <div
             className="chat-logo"
-            onClick={() => isMinimized && setIsMinimized(false)}
+            onClick={(e) => { if (isMinimized) { e.stopPropagation(); setIsMinimized(false); } }}
             style={isMinimized ? { cursor: 'pointer' } : {}}
           >
             <span className="logo-icon">🤖</span>
@@ -101,7 +113,7 @@ export default function ChatWidget() {
           <div className="chat-header-buttons">
             <button
               className="header-btn minimize-btn"
-              onClick={() => setIsMinimized(!isMinimized)}
+              onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
               title={isMinimized ? '최대화' : '최소화'}
             >
               {isMinimized ? '▲' : '▼'}
@@ -152,6 +164,7 @@ export default function ChatWidget() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
