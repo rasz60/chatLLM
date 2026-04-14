@@ -2,9 +2,37 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import ChatWidget from './ChatWidget';
 
+interface MenuItem {
+  name: string;
+  icon: string;
+  action: 'link' | 'newWindow' | 'mail';
+  href?: string;
+}
+
+const MENU_ITEMS: MenuItem[] = [
+  { name: 'about',      icon: 'mdi-account-question-outline', action: 'link',      href: '#about' },
+  { name: 'dlog',       icon: 'mdi-math-log',                 action: 'newWindow', href: 'https://rasz60.github.io/sixt' },
+  { name: 'github',     icon: 'mdi-github',                   action: 'newWindow', href: 'https://github.com/rasz60' },
+  { name: 'send email', icon: 'mdi-email-fast-outline',        action: 'mail' },
+];
+
+function AlphaText({ text }: { text: string }) {
+  return (
+    <span className="alpha-text">
+      {text.split('').map((char, i) =>
+        char === ' '
+          ? <span key={i} className="alpha-space" />
+          : <span key={i} className={`mdi mdi-alpha-${char}`} />
+      )}
+    </span>
+  );
+}
+
 export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showMailDialog, setShowMailDialog] = useState(false);
+  const [mailForm, setMailForm] = useState({ name: '', email: '', message: '' });
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -12,9 +40,31 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const handleMenuItemClick = (item: MenuItem) => {
+    if (item.action === 'newWindow' && item.href) {
+      const w = window.open('about:blank');
+      if (w) w.location.href = item.href;
+    } else if (item.action === 'link' && item.href) {
+      const el = document.querySelector(item.href);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else if (item.action === 'mail') {
+      setShowMailDialog(true);
+    }
+    setShowMenu(false);
+  };
+
+  const handleMailSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    const subject = encodeURIComponent(`Contact from ${mailForm.name}`);
+    const body = encodeURIComponent(`${mailForm.message}\n\n${mailForm.email}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setShowMailDialog(false);
+    setMailForm({ name: '', email: '', message: '' });
+  };
+
   return (
     <div className="app">
-      {/* 헤더 */}
+      {/* 헤더 - 원본 그대로 */}
       <header className={`header ${isScrolled ? 'hidden' : ''}`}>
         <div className="header-content">
           <button className="menu-btn" onClick={() => setShowMenu(!showMenu)}>
@@ -31,12 +81,19 @@ export default function App() {
 
       {/* 메뉴 드롭다운 */}
       {showMenu && (
-        <div className="menu-dropdown">
-          <ul>
-            <li><a href="#home">홈</a></li>
-            <li><a href="#about">소개</a></li>
-            <li><a href="#contact">연락</a></li>
-          </ul>
+        <div className="menu-dropdown" onClick={() => setShowMenu(false)}>
+          <div className="menu-list" onClick={(e) => e.stopPropagation()}>
+            {MENU_ITEMS.map((item) => (
+              <div
+                key={item.name}
+                className="menu-item"
+                onClick={() => handleMenuItemClick(item)}
+              >
+                <button className={`mdi ${item.icon} menu-icon-btn`} />
+                <AlphaText text={item.name} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -44,7 +101,7 @@ export default function App() {
       <main className="main-content">
       </main>
 
-      {/* 스크롤 시 나타나는 플로팅 버튼 */}
+      {/* 스크롤 시 나타나는 플로팅 버튼 - 원본 그대로 */}
       {isScrolled && (
         <>
           <button
@@ -69,6 +126,48 @@ export default function App() {
             ↑
           </button>
         </>
+      )}
+
+      {/* 이메일 다이얼로그 */}
+      {showMailDialog && (
+        <div className="dialog-overlay" onClick={() => setShowMailDialog(false)}>
+          <div className="dialog-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <span className="mdi mdi-email-fast-outline dialog-header-icon" />
+              <span>Send Email</span>
+              <button className="dialog-close" onClick={() => setShowMailDialog(false)}>
+                <span className="mdi mdi-close" />
+              </button>
+            </div>
+            <form onSubmit={handleMailSend} className="mail-form">
+              <input
+                type="text"
+                placeholder="이름"
+                value={mailForm.name}
+                onChange={(e) => setMailForm({ ...mailForm, name: e.target.value })}
+                required
+              />
+              <input
+                type="email"
+                placeholder="이메일"
+                value={mailForm.email}
+                onChange={(e) => setMailForm({ ...mailForm, email: e.target.value })}
+                required
+              />
+              <textarea
+                placeholder="메시지"
+                value={mailForm.message}
+                onChange={(e) => setMailForm({ ...mailForm, message: e.target.value })}
+                required
+                rows={5}
+              />
+              <div className="mail-form-actions">
+                <button type="button" className="btn-cancel" onClick={() => setShowMailDialog(false)}>취소</button>
+                <button type="submit" className="btn-send">전송</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* 챗봇 위젯 */}
