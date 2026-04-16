@@ -1,0 +1,33 @@
+# --- Frontend (React/TS) ---
+node_modules/
+dist/
+build/
+.cache/
+*.log
+package-lock.json
+
+# --- Backend (Go) ---
+# 빌드된 바이너리 파일들
+bin/
+out/
+*.exe
+*.test
+vendor/
+
+# --- Database & Config ---
+# DB 덤프나 로그
+*.sql
+*.dump
+.env*
+!.env.example
+
+# --- OS & Tools ---
+.DS_Store
+.vscode/
+.idea/
+.claudignore
+.git/
+
+# --- Temporary ---
+tmp/
+temp/
