@@ -16,19 +16,21 @@ const MENU_ITEMS: MenuItem[] = [
   { name: 'send email', icon: 'mdi-email-fast-outline',        action: 'mail' },
 ];
 
-function AlphaText({ text }: { text: string }) {
-  return (
-    <span className="alpha-text">
-      {text.split('').map((char, i) =>
-        char === ' '
-          ? <span key={i} className="alpha-space" />
-          : <span key={i} className={`mdi mdi-alpha-${char}`} />
-      )}
-    </span>
-  );
+interface AlphaTextProps {
+  text: string;
 }
 
-export default function App() {
+const AlphaText = ({ text }: AlphaTextProps) => (
+  <span className="alpha-text">
+    {text.split('').map((char, i) =>
+      char === ' '
+        ? <span key={i} className="alpha-space" />
+        : <span key={i} className={`mdi mdi-alpha-${char}`} />
+    )}
+  </span>
+);
+
+const App = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showMailDialog, setShowMailDialog] = useState(false);
@@ -174,4 +176,6 @@ export default function App() {
       <ChatWidget />
     </div>
   );
-}
+};
+
+export default App;

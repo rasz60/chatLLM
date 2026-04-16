@@ -8,7 +8,7 @@ interface Message {
   content: string;
 }
 
-export default function ChatWidget() {
+const ChatWidget = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -167,4 +167,6 @@ export default function ChatWidget() {
       </div>
     </div>
   );
-}
+};
+
+export default ChatWidget;

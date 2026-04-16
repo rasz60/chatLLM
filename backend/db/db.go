@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "github.com/lib/pq"
@@ -19,7 +20,7 @@ func Connect(databaseURL string) *sql.DB {
 	return database
 }
 
-func Migrate(database *sql.DB) {
+func Migrate(database *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS conversations (
 			id         SERIAL PRIMARY KEY,
@@ -39,8 +40,9 @@ func Migrate(database *sql.DB) {
 
 	for _, stmt := range statements {
 		if _, err := database.Exec(stmt); err != nil {
-			log.Println("마이그레이션 실패:", err)
+			return fmt.Errorf("마이그레이션 실패: %w", err)
 		}
 	}
 	log.Println("✓ 마이그레이션 완료")
+	return nil
 }

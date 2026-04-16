@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -59,8 +60,16 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 새 메시지만 저장 (user + assistant)
-	h.saveMessage(conversationID, "user", req.Message)
-	h.saveMessage(conversationID, "assistant", response)
+	if err := h.saveMessage(conversationID, "user", req.Message); err != nil {
+		log.Println("사용자 메시지 저장 실패:", err)
+		http.Error(w, "DB 오류", http.StatusInternalServerError)
+		return
+	}
+	if err := h.saveMessage(conversationID, "assistant", response); err != nil {
+		log.Println("어시스턴트 메시지 저장 실패:", err)
+		http.Error(w, "DB 오류", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(models.ChatResponse{
@@ -89,12 +98,13 @@ func (h *ChatHandler) getOrCreateConversation(sessionID string) (int, string, er
 	return conversationID, newSessionID, err
 }
 
-func (h *ChatHandler) saveMessage(conversationID int, role, content string) {
+func (h *ChatHandler) saveMessage(conversationID int, role, content string) error {
 	_, err := h.db.Exec(
 		"INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
 		conversationID, role, content,
 	)
 	if err != nil {
-		log.Printf("메시지 저장 실패 [%s]: %v", role, err)
+		return fmt.Errorf("메시지 저장 실패 [%s]: %w", role, err)
 	}
+	return nil
 }

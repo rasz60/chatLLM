@@ -17,7 +17,9 @@ func main() {
 	database := db.Connect(cfg.DatabaseURL)
 	defer database.Close()
 
-	db.Migrate(database)
+	if err := db.Migrate(database); err != nil {
+		log.Fatal("마이그레이션 실패:", err)
+	}
 
 	llmSvc := services.NewLLMService(cfg.OllamaBaseURL, cfg.ChatModelKo, cfg.ChatModelEn, cfg.EmbeddingModel)
 	searchSvc := services.NewSearchService(database, llmSvc)
