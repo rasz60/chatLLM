@@ -42,6 +42,15 @@ const App = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const closeMenu = () => {
+    setShowMenu(false);
+  };
+
+  const handleMenuToggle = () => {
+    if (!showMenu) setShowMenu(true);
+    else closeMenu();
+  };
+
   const handleMenuItemClick = (item: MenuItem) => {
     if (item.action === 'newWindow' && item.href) {
       const w = window.open('about:blank');
@@ -52,7 +61,8 @@ const App = () => {
     } else if (item.action === 'mail') {
       setShowMailDialog(true);
     }
-    setShowMenu(false);
+    closeMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleMailSend = (e: React.FormEvent) => {
@@ -67,9 +77,9 @@ const App = () => {
   return (
     <div className="app">
       {/* 헤더 - 원본 그대로 */}
-      <header className={`header ${isScrolled ? 'hidden' : ''}`}>
+      <header className={`header ${isScrolled && !showMenu ? 'hidden' : ''}`}>
         <div className="header-content">
-          <button className="menu-btn" onClick={() => setShowMenu(!showMenu)}>
+          <button className="menu-btn" onClick={handleMenuToggle}>
             ≡
           </button>
           <div className="logo">
@@ -81,22 +91,9 @@ const App = () => {
         </div>
       </header>
 
-      {/* 메뉴 드롭다운 */}
+      {/* 메뉴 backdrop */}
       {showMenu && (
-        <div className="menu-dropdown" onClick={() => setShowMenu(false)}>
-          <div className="menu-list" onClick={(e) => e.stopPropagation()}>
-            {MENU_ITEMS.map((item) => (
-              <div
-                key={item.name}
-                className="menu-item"
-                onClick={() => handleMenuItemClick(item)}
-              >
-                <button className={`mdi ${item.icon} menu-icon-btn`} />
-                <AlphaText text={item.name} />
-              </div>
-            ))}
-          </div>
-        </div>
+        <div className="menu-backdrop" onClick={closeMenu} ></div>
       )}
 
       {/* 메인 콘텐츠 */}
@@ -108,21 +105,21 @@ const App = () => {
         <>
           <button
             className="floating-btn menu-floating"
-            onClick={() => setShowMenu(!showMenu)}
+            onClick={handleMenuToggle}
             title="메뉴"
           >
             ≡
           </button>
           <button
             className="floating-btn home-floating"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             title="홈으로"
           >
             🏠
           </button>
           <button
             className="floating-btn top-floating"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             title="최상위로"
           >
             ↑

@@ -24,7 +24,7 @@ body {
   justify-content: space-between;
   padding: 0 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  z-index: 1000;
+  z-index: 1100;
   transition: transform 0.3s ease;
   border-bottom: 1px solid #ffe66d;
 }
@@ -83,20 +83,30 @@ body {
   width: 44px;
 }
 
+/* ==================== 메뉴 backdrop ==================== */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.35);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ==================== 메뉴 드롭다운 ==================== */
 .menu-dropdown {
   position: fixed;
   top: 80px;
   left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 999;
+  z-index: 1200;
 }
 
 .menu-list {
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-bottom: 1px solid #f0f0f0;
+  background: none;
   padding: 8px 0;
   animation: slideDown 0.3s ease;
   width: fit-content;
@@ -116,57 +126,65 @@ body {
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 8px 20px;
+  gap: 12px;
+  padding: 6px 16px;
   cursor: pointer;
-  transition: background 0.2s;
-}
-
-.menu-item:hover {
-  background: #f9f9f9;
+  background: none;
 }
 
 /* 메뉴 아이콘 버튼 (mdi 클래스 직접 사용) */
 .menu-icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.15);
-  background: none;
-  font-size: 16px;
+  background: white;
+  font-size: 17px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(0, 0, 0, 0.55);
+  color: #333;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
 .menu-icon-btn::before {
   line-height: 1;
 }
 
-.menu-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
 /* MDI 알파 텍스트 */
 .alpha-text {
   display: inline-flex;
   align-items: center;
-  margin-left: 12px;
+  background: white;
+  padding: 3px 10px;
+  border-radius: 4px;
   color: #333;
+  transition: background 0.2s, color 0.2s;
 }
 
 .alpha-text .mdi {
   font-size: 22px;
   line-height: 1;
-  color: #333;
+  color: inherit;
 }
 
 .alpha-space {
   display: inline-block;
   width: 6px;
+}
+
+/* hover: 아이콘/텍스트 색상과 배경색 반전 */
+.menu-item:hover .menu-icon-btn {
+  background: #333;
+  color: white;
+  border-color: #333;
+}
+
+.menu-item:hover .alpha-text {
+  background: #333;
+  color: white;
 }
 
 /* ==================== 메인 콘텐츠 (원본 그대로) ==================== */
@@ -189,7 +207,7 @@ body {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(255, 230, 109, 0.3);
   transition: all 0.3s ease;
-  z-index: 500;
+  z-index: 999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -387,6 +405,7 @@ body {
 
   .menu-dropdown {
     top: 70px;
+    left: 0;
   }
 
   .floating-btn {
