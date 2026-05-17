@@ -11,9 +11,12 @@ type Config struct {
 	DatabaseURL    string
 	OllamaBaseURL  string
 	EmbeddingModel string
-	ChatModelKo    string // 한국어 전용 모델
-	ChatModelEn    string // 영어 전용 모델
+	ChatModelKo    string
+	ChatModelEn    string
 	Port           string
+	SalaryDir      string
+	KISAppKey      string
+	KISAppSecret   string
 }
 
 func Load() *Config {
@@ -30,10 +33,14 @@ func Load() *Config {
 		ChatModelKo:    getEnvOrDefault("CHAT_MODEL_KO", "gemma3:4b"),
 		ChatModelEn:    getEnvOrDefault("CHAT_MODEL_EN", "llama3.2"),
 		Port:           getEnvOrDefault("PORT", ":8000"),
+		SalaryDir:      getEnvOrDefault("SALARY_DIR", "./salary_data"),
+		KISAppKey:      os.Getenv("KIS_APP_KEY"),
+		KISAppSecret:   os.Getenv("KIS_APP_SECRET"),
 	}
 
 	log.Printf("📝 DATABASE_URL: %s", cfg.DatabaseURL)
 	log.Printf("📝 ChatModel KO: %s / EN: %s", cfg.ChatModelKo, cfg.ChatModelEn)
+	log.Printf("📝 SalaryDir: %s", cfg.SalaryDir)
 	return cfg
 }
 
