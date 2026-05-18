@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './ChatWidget.css';
-const ChatWidget = () => {
+export default function ChatWidget() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -76,5 +76,4 @@ const ChatWidget = () => {
                                         e.stopPropagation();
                                         setIsMinimized(false);
                                     } }, style: isMinimized ? { cursor: 'pointer' } : {}, children: [_jsx("span", { className: "logo-icon", children: "\uD83E\uDD16" }), _jsx("span", { className: "logo-text", children: isMinimized ? '' : 'Chat❓Chat❗' })] }), _jsx("div", { className: "chat-header-buttons", children: _jsx("button", { className: "header-btn minimize-btn", onClick: (e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }, title: isMinimized ? '최대화' : '최소화', children: isMinimized ? '▲' : '▼' }) })] }) }), !isMinimized && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "chat-messages", children: [messages.length === 0 ? (_jsx("div", { className: "chat-empty", children: _jsx("p", { children: "\uC548\uB155\uD558\uC138\uC694! \uBB34\uC5C7\uC744 \uB3C4\uC640\uB4DC\uB9B4\uAE4C\uC694?" }) })) : (messages.map((msg) => (_jsx("div", { className: `message ${msg.type}`, children: _jsx("div", { className: "message-bubble", children: msg.content }) }, msg.id)))), loading && (_jsx("div", { className: "message bot", children: _jsxs("div", { className: "message-bubble loading", children: [_jsx("span", {}), _jsx("span", {}), _jsx("span", {})] }) })), _jsx("div", { ref: messagesEndRef })] }), _jsxs("div", { className: "chat-input-area", children: [_jsx("textarea", { ref: textareaRef, value: input, onChange: (e) => setInput(e.target.value), onKeyDown: handleKeyDown, placeholder: "\uBA54\uC2DC\uC9C0 \uC785\uB825... (Shift+Enter: \uC904\uBC14\uAFC8)", disabled: loading, rows: 1 }), _jsx("button", { onClick: handleSend, disabled: loading || !input.trim(), children: loading ? '...' : '전송' })] })] }))] })] }));
-};
-export default ChatWidget;
+}
