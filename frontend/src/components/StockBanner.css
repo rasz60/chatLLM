@@ -1,10 +1,10 @@
-/* ── 배너 ─────────────────────────────────── */
+/* ── 배너 (노란 헤더 기준 색상) ──────────────── */
 .sb-banner {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 8px;
   padding: 4px 8px;
   min-width: 160px;
@@ -14,12 +14,12 @@
 
 .sb-empty {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(0, 0, 0, 0.5);
   cursor: pointer;
   flex: 1;
   white-space: nowrap;
 }
-.sb-empty:hover { color: rgba(255, 255, 255, 0.8); }
+.sb-empty:hover { color: rgba(0, 0, 0, 0.8); }
 
 .sb-stocks {
   display: flex;
@@ -37,13 +37,13 @@
   font-size: 12px;
 }
 
-.sb-name  { color: rgba(255,255,255,0.85); font-weight: 500; }
-.sb-price { font-weight: 600; }
+.sb-name  { color: rgba(0, 0, 0, 0.75); font-weight: 500; }
+.sb-price { font-weight: 600; color: #333; }
 .sb-rate  { font-size: 11px; }
 
-.sb-up   .sb-price, .sb-up   .sb-rate { color: #ff5555; }
-.sb-down .sb-price, .sb-down .sb-rate { color: #5599ff; }
-.sb-flat .sb-price, .sb-flat .sb-rate { color: rgba(255,255,255,0.55); }
+.sb-up   .sb-price, .sb-up   .sb-rate { color: #c0392b; }
+.sb-down .sb-price, .sb-down .sb-rate { color: #1a5276; }
+.sb-flat .sb-price, .sb-flat .sb-rate { color: rgba(0, 0, 0, 0.5); }
 
 /* 컨트롤 버튼 */
 .sb-controls { display: flex; gap: 2px; }
@@ -51,14 +51,14 @@
 .sb-ctrl-btn {
   background: none;
   border: none;
-  color: rgba(255,255,255,0.5);
+  color: rgba(0, 0, 0, 0.4);
   cursor: pointer;
   font-size: 13px;
   padding: 2px 5px;
   border-radius: 4px;
   line-height: 1;
 }
-.sb-ctrl-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sb-ctrl-btn:hover { color: #000; background: rgba(0, 0, 0, 0.08); }
 
 /* 최소화 아이콘 */
 .sb-icon-btn {
@@ -70,7 +70,7 @@
   border-radius: 6px;
   line-height: 1;
 }
-.sb-icon-btn:hover { background: rgba(255,255,255,0.1); }
+.sb-icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
 
 /* ── 모달 ─────────────────────────────────── */
 .sb-overlay {

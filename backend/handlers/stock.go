@@ -101,7 +101,8 @@ func (h *StockHandler) checkConfig(w http.ResponseWriter) bool {
 	return true
 }
 
-// POST /api/stock/search  body: {"query": "005930" | "삼성전자"}
+// POST /api/stock/search  body: {"query": "005930"}
+// 가격조회 엔드포인트를 재활용하여 종목 존재 여부와 한글명을 함께 확인
 func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -119,16 +120,32 @@ func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := fmt.Sprintf("/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&PDNO=%s", req.Query)
-	data, err := h.kisGet(path, "CTPF1702R")
+	path := fmt.Sprintf("/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=%s", req.Query)
+	data, err := h.kisGet(path, "FHKST01010100")
 	if err != nil {
 		log.Printf("[Stock.Search] %v", err)
 		jsonResponse(w, map[string]string{"error": "조회 실패"}, http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	var priceResp struct {
+		RtCd   string `json:"rt_cd"`
+		Output struct {
+			HtsKorIsnm string `json:"hts_kor_isnm"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(data, &priceResp); err != nil || priceResp.RtCd != "0" || priceResp.Output.HtsKorIsnm == "" {
+		log.Printf("[Stock.Search] rt_cd=%s name=%q", priceResp.RtCd, priceResp.Output.HtsKorIsnm)
+		jsonResponse(w, map[string]any{"output": nil}, http.StatusOK)
+		return
+	}
+
+	jsonResponse(w, map[string]any{
+		"output": map[string]string{
+			"pdno":      req.Query,
+			"prdt_name": priceResp.Output.HtsKorIsnm,
+		},
+	}, http.StatusOK)
 }
 
 // POST /api/stock/price  body: {"code": "005930"}

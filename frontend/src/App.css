@@ -103,13 +103,14 @@ body {
   top: 80px;
   left: 0;
   z-index: 1200;
+  animation: slideDown 0.25s ease;
 }
 
 .menu-list {
   background: none;
   padding: 8px 0;
-  animation: slideDown 0.3s ease;
   width: fit-content;
+  list-style: none;
 }
 
 @keyframes slideDown {
@@ -194,7 +195,7 @@ body {
   background: linear-gradient(180deg, #f9f9f9 0%, #ffffff 100%);
 }
 
-/* ==================== 플로팅 버튼 (원본 그대로) ==================== */
+/* ==================== 플로팅 버튼 ==================== */
 .floating-btn {
   position: fixed;
   width: 56px;
@@ -207,7 +208,7 @@ body {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(255, 230, 109, 0.3);
   transition: all 0.3s ease;
-  z-index: 999;
+  z-index: 1060;
   display: flex;
   align-items: center;
   justify-content: center;
