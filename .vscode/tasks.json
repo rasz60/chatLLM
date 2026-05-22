@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Backend",
+            "type": "shell",
+            "command": "cd backend; go run main.go",
+            "presentation": { "group": "my-project" }
+        },
+        {
+            "label": "Run Frontend",
+            "type": "shell",
+            "command": "cd frontend; npm run dev",
+            "presentation": { "group": "my-project" }
+        },
+        {
+            "label": "Run Ollama",
+            "type": "shell",
+            "command": "ollama serve",
+            "presentation": { "group": "my-project" }
+        },
+        {
+            "label": "Start All Services",
+            "dependsOn": [
+                "Run Backend",
+                "Run Frontend",
+                "Run Ollama"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
