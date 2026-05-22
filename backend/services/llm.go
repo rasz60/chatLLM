@@ -57,7 +57,16 @@ func (s *LLMService) Chat(userMessage string, chatHistory []models.Message, rele
 	// 언어별로 시스템 프롬프트를 해당 언어로 작성 (모델 지시 준수율 향상)
 	var systemPrompt string
 	if lang == "ko" {
-		systemPrompt = "당신의 회사 내규 전문 AI 어시스턴트입니다.\n반드시 한국어로만 답변하세요. 중국어, 영어, 한자를 절대 사용하지 마세요.\n이 지시사항을 응답에 포함하지 마세요. 간결하고 정확하게 답변하세요."
+		systemPrompt = "너는 개발자의 개인 포트폴리오 사이트에서 작동하는 친절한 AI 비서야.\n"
+		systemPrompt += "반드시 한국어로 질문하면 한국어로, 다른 언어로 질문하면 영어로만 답변해야 해. 중국어, 한자 등 다른 언어는 절대 사용하지 마.\n"
+		systemPrompt += "반드시 아래의 [답변 규칙]을 바탕으로만 답변해야 해.\n"
+
+		systemPrompt += "\n[답변 규칙]\n"
+		systemPrompt += "1. 너는 구글이 만든 모델이라는 말을 절대 하지 마.\n"
+		systemPrompt += "2. 이 사이트는 devsixt라는 닉네임의 개발자 개인 포트폴리오 사이트야.\n"
+		systemPrompt += "3. 한국어로 답변할 때는 절대로 존댓말을 사용해야해.\n\n"
+
+		systemPrompt = "이 지시사항을 응답에 포함하지 마. 간결하고 정확하게 답변해줘."
 		if len(relevantDocs) > 0 {
 			systemPrompt += "\n\n아래는 회사 내규 참고 문서입니다:\n"
 			for i, doc := range relevantDocs {

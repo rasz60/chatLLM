@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +28,7 @@ type StockHandler struct {
 func NewStockHandler(cfg *config.Config) *StockHandler {
 	return &StockHandler{
 		cfg:    cfg,
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
@@ -84,6 +86,7 @@ func (h *StockHandler) kisGet(path, trID string) ([]byte, error) {
 	req.Header.Set("appsecret", h.cfg.KISAppSecret)
 	req.Header.Set("tr_id", trID)
 	req.Header.Set("content-type", "application/json; charset=utf-8")
+	req.Header.Set("custtype", "P")
 
 	resp, err := h.client.Do(req)
 	if err != nil {
@@ -95,60 +98,304 @@ func (h *StockHandler) kisGet(path, trID string) ([]byte, error) {
 
 func (h *StockHandler) checkConfig(w http.ResponseWriter) bool {
 	if h.cfg.KISAppKey == "" || h.cfg.KISAppSecret == "" {
-		jsonResponse(w, map[string]string{"error": "KIS API 키가 설정되지 않았습니다. .env 파일에 KIS_APP_KEY, KIS_APP_SECRET을 입력해주세요."}, http.StatusBadRequest)
+		jsonResponse(w, map[string]string{"error": "KIS API 키가 설정되지 않았습니다."}, http.StatusBadRequest)
 		return false
 	}
 	return true
 }
 
-// POST /api/stock/search  body: {"query": "005930"}
-// 가격조회 엔드포인트를 재활용하여 종목 존재 여부와 한글명을 함께 확인
+// ── 검색 결과 공통 타입 ──────────────────────────────────────────
+
+type stockSearchResult struct {
+	Pdno     string `json:"pdno"`
+	PrdtName string `json:"prdt_name"`
+	Market   string `json:"market,omitempty"` // "KOSPI"|"KOSDAQ" / "overseas:NAS" 등
+}
+
+// detectQueryType: "domestic_code" | "domestic_name" | "overseas"
+func detectQueryType(q string) string {
+	// 6자리 숫자 → 국내 종목코드
+	if len(q) == 6 {
+		allDig := true
+		for _, c := range q {
+			if c < '0' || c > '9' {
+				allDig = false
+				break
+			}
+		}
+		if allDig {
+			return "domestic_code"
+		}
+	}
+	// 한글 포함 → 국내 종목명
+	for _, c := range q {
+		if (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x3131 && c <= 0x318E) {
+			return "domestic_name"
+		}
+	}
+	return "overseas"
+}
+
+// ── 국내: Yahoo Finance 검색 (KSC=KOSPI, KOE=KOSDAQ) ────────────
+
+var yahooKorExch = map[string]string{
+	"KSC": "KOSPI",
+	"KOE": "KOSDAQ",
+}
+
+func (h *StockHandler) searchDomestic(query string, exactCode bool) ([]stockSearchResult, error) {
+	apiURL := "https://query2.finance.yahoo.com/v1/finance/search?q=" +
+		url.QueryEscape(query) + "&quotesCount=15&newsCount=0&listsCount=0"
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Yahoo Finance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var yr struct {
+		Quotes []struct {
+			Symbol    string `json:"symbol"`
+			Shortname string `json:"shortname"`
+			Longname  string `json:"longname"`
+			Exchange  string `json:"exchange"`
+			TypeDisp  string `json:"typeDisp"`
+		} `json:"quotes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&yr); err != nil {
+		return nil, fmt.Errorf("Yahoo Finance decode: %w", err)
+	}
+
+	var results []stockSearchResult
+	for _, q := range yr.Quotes {
+		if q.TypeDisp != "Equity" || q.Symbol == "" {
+			continue
+		}
+		market, ok := yahooKorExch[q.Exchange]
+		if !ok {
+			continue
+		}
+		code := strings.SplitN(q.Symbol, ".", 2)[0]
+		if exactCode && code != query {
+			continue
+		}
+		name := q.Shortname
+		if name == "" {
+			name = q.Longname
+		}
+		if name == "" {
+			name = code
+		}
+		results = append(results, stockSearchResult{Pdno: code, PrdtName: name, Market: market})
+		if len(results) >= 10 {
+			break
+		}
+	}
+	return results, nil
+}
+
+// ── 해외: KIS 코드 직접 조회 ─────────────────────────────────────
+
+// kisExchanges: KIS 코드 → 표시명 (market 필드: "overseas:NAS" 형태로 저장)
+var kisExchanges = []struct{ code, display string }{
+	{"NAS", "NASDAQ"},
+	{"NYS", "NYSE"},
+	{"AMS", "AMEX"},
+	{"TSE", "도쿄"},
+	{"HKS", "홍콩"},
+	{"SHS", "상해"},
+	{"SZS", "심천"},
+}
+
+func (h *StockHandler) searchOverseasByCode(code string) ([]stockSearchResult, error) {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for _, exch := range kisExchanges {
+		path := fmt.Sprintf("/uapi/overseas-price/v1/quotations/search-stock-info?EXCD=%s&PDNO=%s", exch.code, code)
+		data, err := h.kisGet(path, "CTPF1702R")
+		if err != nil {
+			log.Printf("[Stock.Search] KIS %s/%s req error: %v", exch.code, code, err)
+			continue
+		}
+		var resp struct {
+			RtCd   string `json:"rt_cd"`
+			Output struct {
+				Pdno     string `json:"pdno"`
+				PrdtName string `json:"prdt_name"`
+			} `json:"output"`
+		}
+		if err := json.Unmarshal(data, &resp); err != nil || resp.RtCd != "0" || resp.Output.Pdno == "" {
+			continue
+		}
+		return []stockSearchResult{{
+			Pdno:     resp.Output.Pdno,
+			PrdtName: resp.Output.PrdtName,
+			Market:   "overseas:" + exch.code,
+		}}, nil
+	}
+	return nil, nil
+}
+
+// ── 해외: Yahoo Finance 이름 검색 (영문/한글) ────────────────────
+
+// Yahoo exchange code → KIS exchange code
+var yahooToKIS = map[string]string{
+	"NMS": "NAS", "NGM": "NAS", "NCM": "NAS",
+	"NYQ": "NYS",
+	"ASE": "AMS",
+	"TKS": "TSE", "OSA": "TSE",
+	"HKG": "HKS",
+	"SHH": "SHS", "SHZ": "SZS",
+}
+
+func (h *StockHandler) searchOverseasByName(query string) ([]stockSearchResult, error) {
+	apiURL := "https://query2.finance.yahoo.com/v1/finance/search?q=" +
+		url.QueryEscape(query) + "&quotesCount=10&newsCount=0&listsCount=0"
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Yahoo Finance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var yahooResp struct {
+		Quotes []struct {
+			Symbol    string `json:"symbol"`
+			Shortname string `json:"shortname"`
+			Longname  string `json:"longname"`
+			Exchange  string `json:"exchange"`
+			TypeDisp  string `json:"typeDisp"`
+		} `json:"quotes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&yahooResp); err != nil {
+		return nil, fmt.Errorf("Yahoo Finance decode: %w", err)
+	}
+
+	var results []stockSearchResult
+	for _, q := range yahooResp.Quotes {
+		if q.TypeDisp != "Equity" || q.Symbol == "" {
+			continue
+		}
+		name := q.Shortname
+		if name == "" {
+			name = q.Longname
+		}
+		if name == "" {
+			name = q.Symbol
+		}
+
+		if mkt, isKor := yahooKorExch[q.Exchange]; isKor {
+			code := strings.SplitN(q.Symbol, ".", 2)[0]
+			results = append(results, stockSearchResult{Pdno: code, PrdtName: name, Market: mkt})
+		} else {
+			kisCode := yahooToKIS[q.Exchange]
+			if kisCode == "" {
+				continue
+			}
+			results = append(results, stockSearchResult{
+				Pdno:     q.Symbol,
+				PrdtName: name,
+				Market:   "overseas:" + kisCode,
+			})
+		}
+		if len(results) >= 8 {
+			break
+		}
+	}
+	return results, nil
+}
+
+// isLikelyTicker: 1~6자 영문/숫자/점/하이픈 조합 → 종목코드로 판단
+func isLikelyTicker(s string) bool {
+	if len(s) < 1 || len(s) > 6 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func (h *StockHandler) searchOverseas(query string) ([]stockSearchResult, error) {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+
+	// 짧은 영문 코드처럼 보이면 KIS 직접 조회 우선
+	if isLikelyTicker(upper) {
+		results, _ := h.searchOverseasByCode(upper)
+		if len(results) > 0 {
+			return results, nil
+		}
+	}
+
+	// 이름 검색 (영문/한글) → Yahoo Finance
+	return h.searchOverseasByName(query)
+}
+
+// ── 핸들러 ───────────────────────────────────────────────────────
+
+// POST /api/stock/search  body: {"query": "005930" | "삼성" | "AAPL" | "Apple" | "애플"}
 func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !h.checkConfig(w) {
 		return
 	}
 
 	var req struct {
 		Query string `json:"query"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Query == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Query) == "" {
 		jsonResponse(w, map[string]string{"error": "query required"}, http.StatusBadRequest)
 		return
 	}
+	query := strings.TrimSpace(req.Query)
 
-	path := fmt.Sprintf("/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=%s", req.Query)
-	data, err := h.kisGet(path, "FHKST01010100")
+	// 이름 검색 최소 2글자
+	if len([]rune(query)) < 2 {
+		jsonResponse(w, map[string]any{"output": []stockSearchResult{}}, http.StatusOK)
+		return
+	}
+
+	qtype := detectQueryType(query)
+	var results []stockSearchResult
+	var err error
+
+	switch qtype {
+	case "domestic_code":
+		results, err = h.searchDomestic(query, true)
+	case "domestic_name":
+		results, err = h.searchDomestic(query, false)
+	case "overseas":
+		if h.cfg.KISAppKey != "" {
+			results, err = h.searchOverseas(query)
+		}
+	}
+
 	if err != nil {
-		log.Printf("[Stock.Search] %v", err)
-		jsonResponse(w, map[string]string{"error": "조회 실패"}, http.StatusInternalServerError)
-		return
+		log.Printf("[Stock.Search] %s query=%q: %v", qtype, query, err)
+	}
+	if results == nil {
+		results = []stockSearchResult{}
 	}
 
-	var priceResp struct {
-		RtCd   string `json:"rt_cd"`
-		Output struct {
-			HtsKorIsnm string `json:"hts_kor_isnm"`
-		} `json:"output"`
-	}
-	if err := json.Unmarshal(data, &priceResp); err != nil || priceResp.RtCd != "0" || priceResp.Output.HtsKorIsnm == "" {
-		log.Printf("[Stock.Search] rt_cd=%s name=%q", priceResp.RtCd, priceResp.Output.HtsKorIsnm)
-		jsonResponse(w, map[string]any{"output": nil}, http.StatusOK)
-		return
-	}
-
-	jsonResponse(w, map[string]any{
-		"output": map[string]string{
-			"pdno":      req.Query,
-			"prdt_name": priceResp.Output.HtsKorIsnm,
-		},
-	}, http.StatusOK)
+	jsonResponse(w, map[string]any{"output": results}, http.StatusOK)
 }
 
-// POST /api/stock/price  body: {"code": "005930"}
+// POST /api/stock/price  body: {"code": "005930", "market": "KOSPI"} or {"code": "AAPL", "market": "overseas:NAS"}
 func (h *StockHandler) Price(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -159,15 +406,28 @@ func (h *StockHandler) Price(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Code string `json:"code"`
+		Code   string `json:"code"`
+		Market string `json:"market"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
 		jsonResponse(w, map[string]string{"error": "code required"}, http.StatusBadRequest)
 		return
 	}
 
-	path := fmt.Sprintf("/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=%s", req.Code)
-	data, err := h.kisGet(path, "FHKST01010100")
+	var path, trID string
+	if excd, ok := strings.CutPrefix(req.Market, "overseas:"); ok {
+		path = fmt.Sprintf("/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=%s&SYMB=%s", excd, req.Code)
+		trID = "HHDFS00000300"
+	} else {
+		mrktDiv := "J"
+		if req.Market == "KOSDAQ" {
+			mrktDiv = "Q"
+		}
+		path = fmt.Sprintf("/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=%s&FID_INPUT_ISCD=%s", mrktDiv, req.Code)
+		trID = "FHKST01010100"
+	}
+
+	data, err := h.kisGet(path, trID)
 	if err != nil {
 		log.Printf("[Stock.Price] %v", err)
 		jsonResponse(w, map[string]string{"error": "조회 실패"}, http.StatusInternalServerError)

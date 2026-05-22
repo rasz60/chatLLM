@@ -4,6 +4,7 @@ import './StockBanner.css';
 interface StockItem {
   code: string;
   name: string;
+  market: string; // "KOSPI"|"KOSDAQ" / "overseas:NAS" 등
 }
 
 interface PriceData {
@@ -16,6 +17,18 @@ interface PriceData {
 interface SearchResult {
   pdno: string;
   prdt_name: string;
+  market?: string;
+}
+
+const KIS_EXCHANGE_NAMES: Record<string, string> = {
+  NAS: 'NASDAQ', NYS: 'NYSE', AMS: 'AMEX',
+  TSE: '도쿄', HKS: '홍콩', SHS: '상해', SZS: '심천',
+};
+
+function marketDisplay(market: string): string {
+  if (!market) return '';
+  const code = market.startsWith('overseas:') ? market.split(':')[1] : market;
+  return KIS_EXCHANGE_NAMES[code] ?? code;
 }
 
 const STORAGE_KEY = 'watchlist_stocks';
@@ -62,15 +75,18 @@ export default function StockBanner() {
         const res = await fetch('/api/stock/price', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: s.code }),
+          body: JSON.stringify({ code: s.code, market: s.market || '' }),
         });
         const data = await res.json();
         if (data.output) {
+          const o = data.output;
           updates[s.code] = {
-            price: data.output.stck_prpr || '-',
-            change: data.output.prdy_vrss || '0',
-            rate: data.output.prdy_ctrt || '0.00',
-            sign: data.output.prdy_vrss_sign || '3',
+            // 국내: stck_prpr / prdy_vrss / prdy_ctrt / prdy_vrss_sign
+            // 해외: last / diff / rate / sign
+            price:  o.stck_prpr || o.last  || '-',
+            change: o.prdy_vrss || o.diff  || '0',
+            rate:   o.prdy_ctrt || o.rate  || '0.00',
+            sign:   o.prdy_vrss_sign || o.sign || '3',
           };
         }
       } catch { /* ignore per-stock errors */ }
@@ -96,8 +112,8 @@ export default function StockBanner() {
           body: JSON.stringify({ query: query.trim() }),
         });
         const data = await res.json();
-        if (data.output?.pdno) {
-          setResults([{ pdno: data.output.pdno, prdt_name: data.output.prdt_name }]);
+        if (Array.isArray(data.output) && data.output.length > 0) {
+          setResults(data.output);
         } else {
           setResults([]);
         }
@@ -109,7 +125,7 @@ export default function StockBanner() {
 
   const addStock = (r: SearchResult) => {
     if (!stocks.find(s => s.code === r.pdno)) {
-      setStocks(prev => [...prev, { code: r.pdno, name: r.prdt_name }]);
+      setStocks(prev => [...prev, { code: r.pdno, name: r.prdt_name, market: r.market ?? '' }]);
     }
     setQuery('');
     setResults([]);
@@ -177,7 +193,7 @@ export default function StockBanner() {
                   <input
                     type="text"
                     className="sb-search-input"
-                    placeholder="종목코드 입력 (예: 005930)"
+                    placeholder="종목코드·이름 (005930, 삼성, AAPL, Apple)"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     autoFocus
@@ -186,15 +202,18 @@ export default function StockBanner() {
                 </div>
                 <div className="sb-results">
                   {!query.trim() && (
-                    <p className="sb-hint-msg">종목코드 6자리를 입력하면<br />종목 정보를 불러옵니다.</p>
+                    <p className="sb-hint-msg">국내: 종목코드·한글명<br />해외: 티커·영문명 입력</p>
                   )}
                   {query.trim() && !searching && results.length === 0 && (
                     <p className="sb-hint-msg">검색 결과가 없습니다.</p>
                   )}
                   {results.map(r => (
-                    <div key={r.pdno} className="sb-result-row" onClick={() => addStock(r)}>
+                    <div key={`${r.pdno}-${r.market}`} className="sb-result-row" onClick={() => addStock(r)}>
                       <span className="sb-result-name">{r.prdt_name}</span>
-                      <span className="sb-result-code">{r.pdno}</span>
+                      <span className="sb-result-code">
+                        {r.market && <span className="sb-result-market">[{marketDisplay(r.market)}]</span>}
+                        {r.pdno}
+                      </span>
                     </div>
                   ))}
                 </div>
