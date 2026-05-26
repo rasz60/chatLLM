@@ -3,11 +3,12 @@ import './App.css';
 import ChatWidget from './ChatWidget';
 import WorkReport from './pages/WorkReport';
 import SalaryReport from './pages/SalaryReport';
+import AboutPage from './pages/AboutPage';
 import StockBanner from './components/StockBanner';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 
-type Page = 'home' | 'work' | 'salary';
+type Page = 'home' | 'about' | 'contact' | 'work' | 'salary';
 type RequiredRole = 'all' | 'user' | 'admin';
 
 interface MenuItem {
@@ -20,11 +21,11 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { name: '홈',        icon: 'mdi-home-outline',            action: 'navigate', page: 'home',   requiredRole: 'all'   },
-  { name: '소개',      icon: 'mdi-account-question-outline', action: 'link',     href: '#about', requiredRole: 'all'   },
-  { name: '연락',      icon: 'mdi-email-fast-outline',       action: 'link',     href: '#contact', requiredRole: 'all' },
-  { name: '업무일지',  icon: 'mdi-briefcase-outline',        action: 'navigate', page: 'work',   requiredRole: 'user'  },
-  { name: '급여명세서', icon: 'mdi-calendar-month-outline',  action: 'navigate', page: 'salary', requiredRole: 'admin' },
+  { name: '홈',        icon: 'mdi-home-outline',            action: 'navigate',  page: 'home',    requiredRole: 'all'   },
+  { name: '소개',      icon: 'mdi-account-question-outline', action: 'navigate', page: 'about',   requiredRole: 'all'   },
+  { name: '연락',      icon: 'mdi-email-fast-outline',       action: 'link',     page: 'contact', requiredRole: 'all' },
+  { name: '업무일지',  icon: 'mdi-briefcase-outline',        action: 'navigate',  page: 'work',    requiredRole: 'user'  },
+  { name: '급여명세서', icon: 'mdi-calendar-month-outline',  action: 'navigate',  page: 'salary',  requiredRole: 'admin' },
 ];
 
 function AppInner() {
@@ -129,15 +130,16 @@ function AppInner() {
 
       <main className="main-content">
         {currentPage === 'home' && <div className="home-placeholder" />}
+        {currentPage === 'about' && <AboutPage />}
         {currentPage === 'work' && (user ? <WorkReport /> : null)}
         {currentPage === 'salary' && (user?.role === 'admin' ? <SalaryReport /> : null)}
       </main>
 
       {isScrolled && (
         <>
-          <button className="floating-btn menu-floating" onClick={() => setShowMenu(prev => !prev)} title="메뉴">≡</button>
-          <button className="floating-btn home-floating" onClick={() => navigate('home')} title="홈으로">🏠</button>
-          <button className="floating-btn top-floating" onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} title="최상위로">↑</button>
+          <button className="floating-btn menu-floating" onClick={() => setShowMenu(prev => !prev)} title="메뉴"><span className="mdi mdi-menu" /></button>
+          <button className="floating-btn home-floating" onClick={() => navigate('home')} title="홈으로"><span className="mdi mdi-home-outline" /></button>
+          <button className="floating-btn top-floating" onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} title="최상위로"><span className="mdi mdi-chevron-up" /></button>
         </>
       )}
 

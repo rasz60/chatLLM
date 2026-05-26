@@ -218,24 +218,36 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: none;
-  background: linear-gradient(135deg, #ffe66d 0%, #fff4d6 100%);
-  color: #333;
-  font-size: 24px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255, 230, 109, 0.3);
-  transition: all 0.3s ease;
+  /* 흰 배경 + 그라디언트 테두리 */
+  background-image: linear-gradient(white, white),
+                    linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  border: 2px solid transparent;
+  color: #764ba2;
+  font-size: 22px;
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.25);
+  transition: all 0.25s ease;
   z-index: 1060;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #fff9e6;
+}
+
+.floating-btn .mdi {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .floating-btn:hover {
-  background: linear-gradient(135deg, #ffda47 0%, #ffe88e 100%);
+  background-image: linear-gradient(#f3f0ff, #f3f0ff),
+                    linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(255, 230, 109, 0.4);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  color: #667eea;
 }
 
 /* 좌측 상단 - 메뉴 */
