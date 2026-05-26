@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,19 +20,26 @@ const kisBaseURL = "https://openapi.koreainvestment.com:9443"
 
 type StockHandler struct {
 	cfg         *config.Config
+	db          *sql.DB
 	token       string
 	tokenExpiry time.Time
 	mu          sync.Mutex
 	client      *http.Client
 }
 
-func NewStockHandler(cfg *config.Config) *StockHandler {
+func NewStockHandler(cfg *config.Config, db *sql.DB) *StockHandler {
 	return &StockHandler{
 		cfg:    cfg,
+		db:     db,
 		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
+// ── KIS 인증 ─────────────────────────────────────────────────────
+// Author: rassayzsixt X Claude
+// Desc
+//*KIS API는 OAuth2 Client Credentials 방식으로 인증
+//*토큰은 유효기간이 1시간이므로, 만료 5분 전에 갱신하도록 구현 
 func (h *StockHandler) getToken() (string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -104,114 +112,66 @@ func (h *StockHandler) checkConfig(w http.ResponseWriter) bool {
 	return true
 }
 
-// ── 검색 결과 공통 타입 ──────────────────────────────────────────
+// ── 공통 타입 ────────────────────────────────────────────────────
 
+// stockSearchResult: 검색/가격 조회에 공통으로 사용하는 종목 정보
+// market: "KOSPI"|"KOSDAQ" (국내) / "overseas:NAS"|"overseas:NYS" 등 (해외)
 type stockSearchResult struct {
 	Pdno     string `json:"pdno"`
 	PrdtName string `json:"prdt_name"`
-	Market   string `json:"market,omitempty"` // "KOSPI"|"KOSDAQ" / "overseas:NAS" 등
+	Market   string `json:"market,omitempty"`
 }
 
-// detectQueryType: "domestic_code" | "domestic_name" | "overseas"
-func detectQueryType(q string) string {
-	// 6자리 숫자 → 국내 종목코드
-	if len(q) == 6 {
-		allDig := true
-		for _, c := range q {
-			if c < '0' || c > '9' {
-				allDig = false
-				break
-			}
-		}
-		if allDig {
-			return "domestic_code"
-		}
-	}
-	// 한글 포함 → 국내 종목명
-	for _, c := range q {
+func hasKorean(s string) bool {
+	for _, c := range s {
 		if (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x3131 && c <= 0x318E) {
-			return "domestic_name"
+			return true
 		}
 	}
-	return "overseas"
+	return false
 }
 
-// ── 국내: Yahoo Finance 검색 (KSC=KOSPI, KOE=KOSDAQ) ────────────
+// ── 검색: DB (국내/해외 공통) ────────────────────────────────────
+//
+// stocks 테이블(seed_stocks.py로 시드)에 국내+해외 종목이 모두 들어있으므로
+// 한글명·영문명·종목코드 모두 ILIKE로 검색한다.
+// 정렬: 완전일치 코드 → 완전일치 이름 → 전방일치 코드 → 전방일치 이름 → 부분일치
 
-var yahooKorExch = map[string]string{
-	"KSC": "KOSPI",
-	"KOE": "KOSDAQ",
-}
-
-func (h *StockHandler) searchDomestic(query string, exactCode bool) ([]stockSearchResult, error) {
-	apiURL := "https://query2.finance.yahoo.com/v1/finance/search?q=" +
-		url.QueryEscape(query) + "&quotesCount=15&newsCount=0&listsCount=0"
-
-	req, err := http.NewRequest("GET", apiURL, nil)
+func (h *StockHandler) searchDB(query string) ([]stockSearchResult, error) {
+	rows, err := h.db.Query(`
+		SELECT code, name, market FROM stocks
+		WHERE name ILIKE $1 OR code ILIKE $1
+		ORDER BY
+			CASE WHEN LOWER(code) = LOWER($2) THEN 0
+			     WHEN LOWER(name) = LOWER($2) THEN 1
+			     WHEN code ILIKE $3            THEN 2
+			     WHEN name ILIKE $3            THEN 3
+			     ELSE 4 END
+		LIMIT 10
+	`, "%"+query+"%", query, query+"%")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("DB search: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("Yahoo Finance: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var yr struct {
-		Quotes []struct {
-			Symbol    string `json:"symbol"`
-			Shortname string `json:"shortname"`
-			Longname  string `json:"longname"`
-			Exchange  string `json:"exchange"`
-			TypeDisp  string `json:"typeDisp"`
-		} `json:"quotes"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&yr); err != nil {
-		return nil, fmt.Errorf("Yahoo Finance decode: %w", err)
-	}
+	defer rows.Close()
 
 	var results []stockSearchResult
-	for _, q := range yr.Quotes {
-		if q.TypeDisp != "Equity" || q.Symbol == "" {
+	for rows.Next() {
+		var r stockSearchResult
+		if err := rows.Scan(&r.Pdno, &r.PrdtName, &r.Market); err != nil {
 			continue
 		}
-		market, ok := yahooKorExch[q.Exchange]
-		if !ok {
-			continue
-		}
-		code := strings.SplitN(q.Symbol, ".", 2)[0]
-		if exactCode && code != query {
-			continue
-		}
-		name := q.Shortname
-		if name == "" {
-			name = q.Longname
-		}
-		if name == "" {
-			name = code
-		}
-		results = append(results, stockSearchResult{Pdno: code, PrdtName: name, Market: market})
-		if len(results) >= 10 {
-			break
-		}
+		results = append(results, r)
 	}
-	return results, nil
+	return results, rows.Err()
 }
 
-// ── 해외: KIS 코드 직접 조회 ─────────────────────────────────────
+// ── 검색 fallback: 해외 KIS 직접 조회 ───────────────────────────
+//
+// DB에 없는 종목(신규 상장 등)을 위한 fallback.
+// 한글 쿼리는 DB에서만 처리하므로 이 경로에 진입하지 않는다.
 
-// kisExchanges: KIS 코드 → 표시명 (market 필드: "overseas:NAS" 형태로 저장)
-var kisExchanges = []struct{ code, display string }{
-	{"NAS", "NASDAQ"},
-	{"NYS", "NYSE"},
-	{"AMS", "AMEX"},
-	{"TSE", "도쿄"},
-	{"HKS", "홍콩"},
-	{"SHS", "상해"},
-	{"SZS", "심천"},
+var kisExchanges = []struct{ code string }{
+	{"NAS"}, {"NYS"}, {"AMS"}, {"TSE"}, {"HKS"}, {"SHS"}, {"SZS"},
 }
 
 func (h *StockHandler) searchOverseasByCode(code string) ([]stockSearchResult, error) {
@@ -242,9 +202,7 @@ func (h *StockHandler) searchOverseasByCode(code string) ([]stockSearchResult, e
 	return nil, nil
 }
 
-// ── 해외: Yahoo Finance 이름 검색 (영문/한글) ────────────────────
-
-// Yahoo exchange code → KIS exchange code
+// yahooToKIS: Yahoo Finance 거래소 코드 → KIS 거래소 코드
 var yahooToKIS = map[string]string{
 	"NMS": "NAS", "NGM": "NAS", "NCM": "NAS",
 	"NYQ": "NYS",
@@ -296,21 +254,15 @@ func (h *StockHandler) searchOverseasByName(query string) ([]stockSearchResult, 
 		if name == "" {
 			name = q.Symbol
 		}
-
-		if mkt, isKor := yahooKorExch[q.Exchange]; isKor {
-			code := strings.SplitN(q.Symbol, ".", 2)[0]
-			results = append(results, stockSearchResult{Pdno: code, PrdtName: name, Market: mkt})
-		} else {
-			kisCode := yahooToKIS[q.Exchange]
-			if kisCode == "" {
-				continue
-			}
-			results = append(results, stockSearchResult{
-				Pdno:     q.Symbol,
-				PrdtName: name,
-				Market:   "overseas:" + kisCode,
-			})
+		kisCode := yahooToKIS[q.Exchange]
+		if kisCode == "" {
+			continue
 		}
+		results = append(results, stockSearchResult{
+			Pdno:     q.Symbol,
+			PrdtName: name,
+			Market:   "overseas:" + kisCode,
+		})
 		if len(results) >= 8 {
 			break
 		}
@@ -318,9 +270,9 @@ func (h *StockHandler) searchOverseasByName(query string) ([]stockSearchResult, 
 	return results, nil
 }
 
-// isLikelyTicker: 1~6자 영문/숫자/점/하이픈 조합 → 종목코드로 판단
+// isLikelyTicker: 1~5자 대문자 영문/숫자 조합이면 해외 종목코드로 판단
 func isLikelyTicker(s string) bool {
-	if len(s) < 1 || len(s) > 6 {
+	if len(s) < 1 || len(s) > 5 {
 		return false
 	}
 	for _, c := range s {
@@ -331,24 +283,24 @@ func isLikelyTicker(s string) bool {
 	return true
 }
 
+// searchOverseas: DB fallback용 해외 종목 검색
+// 티커처럼 보이면 KIS 직접 조회 → 그 외엔 Yahoo Finance 이름 검색
 func (h *StockHandler) searchOverseas(query string) ([]stockSearchResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(query))
-
-	// 짧은 영문 코드처럼 보이면 KIS 직접 조회 우선
 	if isLikelyTicker(upper) {
 		results, _ := h.searchOverseasByCode(upper)
 		if len(results) > 0 {
 			return results, nil
 		}
 	}
-
-	// 이름 검색 (영문/한글) → Yahoo Finance
 	return h.searchOverseasByName(query)
 }
 
 // ── 핸들러 ───────────────────────────────────────────────────────
 
-// POST /api/stock/search  body: {"query": "005930" | "삼성" | "AAPL" | "Apple" | "애플"}
+// POST /api/stock/search
+// body: {"query": "삼성전자" | "005930" | "AAPL" | "Apple"}
+// 흐름: DB ILIKE 검색 → (DB 미스 + 비한글) 해외 API fallback
 func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -364,29 +316,27 @@ func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	query := strings.TrimSpace(req.Query)
 
-	// 이름 검색 최소 2글자
 	if len([]rune(query)) < 2 {
 		jsonResponse(w, map[string]any{"output": []stockSearchResult{}}, http.StatusOK)
 		return
 	}
 
-	qtype := detectQueryType(query)
 	var results []stockSearchResult
 	var err error
 
-	switch qtype {
-	case "domestic_code":
-		results, err = h.searchDomestic(query, true)
-	case "domestic_name":
-		results, err = h.searchDomestic(query, false)
-	case "overseas":
-		if h.cfg.KISAppKey != "" {
-			results, err = h.searchOverseas(query)
+	if h.db != nil {
+		results, err = h.searchDB(query)
+		if err != nil {
+			log.Printf("[Stock.Search] DB query=%q: %v", query, err)
 		}
 	}
 
-	if err != nil {
-		log.Printf("[Stock.Search] %s query=%q: %v", qtype, query, err)
+	// DB에 없고 한글이 아닌 경우(영문 티커·이름)만 해외 API 시도
+	if len(results) == 0 && !hasKorean(query) && h.cfg.KISAppKey != "" {
+		results, err = h.searchOverseas(query)
+		if err != nil {
+			log.Printf("[Stock.Search] overseas query=%q: %v", query, err)
+		}
 	}
 	if results == nil {
 		results = []stockSearchResult{}
@@ -395,7 +345,194 @@ func (h *StockHandler) Search(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]any{"output": results}, http.StatusOK)
 }
 
-// POST /api/stock/price  body: {"code": "005930", "market": "KOSPI"} or {"code": "AAPL", "market": "overseas:NAS"}
+// ── 기준가 CRUD ──────────────────────────────────────────────────
+// Authorization: Bearer <token> 헤더에서 user_id 추출.
+// 토큰 없으면 "default" 사용 (개발/테스트용 fallback).
+
+func (h *StockHandler) resolveUserID(r *http.Request) string {
+	userID, _, err := extractUserID(r, h.cfg.JWTSecret)
+	if err != nil || userID == "" {
+		return "default"
+	}
+	return userID
+}
+
+// GET /api/stock/refprice
+// 해당 유저의 전체 기준가 반환: {"data": {"005930": 75000, "AAPL": 180.5}}
+func (h *StockHandler) GetRefPrices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	rows, err := h.db.Query(
+		"SELECT code, ref_price FROM stock_ref_prices WHERE user_id = $1", userID)
+	if err != nil {
+		log.Printf("[Stock.RefPrice] GET error: %v", err)
+		jsonResponse(w, map[string]string{"error": "조회 실패"}, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	data := map[string]float64{}
+	for rows.Next() {
+		var code string
+		var price float64
+		if err := rows.Scan(&code, &price); err != nil {
+			continue
+		}
+		data[code] = price
+	}
+	jsonResponse(w, map[string]any{"data": data}, http.StatusOK)
+}
+
+// POST /api/stock/refprice
+// body: {"code": "005930", "ref_price": 75000}
+func (h *StockHandler) SetRefPrice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	var req struct {
+		Code     string  `json:"code"`
+		RefPrice float64 `json:"ref_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" || req.RefPrice <= 0 {
+		jsonResponse(w, map[string]string{"error": "invalid request"}, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.db.Exec(`
+		INSERT INTO stock_ref_prices (user_id, code, ref_price, updated_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, code) DO UPDATE
+		SET ref_price = $3, updated_at = NOW()
+	`, userID, req.Code, req.RefPrice)
+	if err != nil {
+		log.Printf("[Stock.RefPrice] SET error: %v", err)
+		jsonResponse(w, map[string]string{"error": "저장 실패"}, http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"ok": "1"}, http.StatusOK)
+}
+
+// DELETE /api/stock/refprice
+// body: {"code": "005930"}
+func (h *StockHandler) DeleteRefPrice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+		jsonResponse(w, map[string]string{"error": "invalid request"}, http.StatusBadRequest)
+		return
+	}
+
+	h.db.Exec("DELETE FROM stock_ref_prices WHERE user_id = $1 AND code = $2", userID, req.Code)
+	jsonResponse(w, map[string]string{"ok": "1"}, http.StatusOK)
+}
+
+// ── 관심종목 CRUD ─────────────────────────────────────────────────
+
+// GET /api/stock/watchlist
+// 해당 유저의 관심종목 목록: {"stocks": [{code, name, market}, ...]}
+func (h *StockHandler) GetWatchlist(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	rows, err := h.db.Query(
+		"SELECT code, name, market FROM stock_watchlist WHERE user_id = $1 ORDER BY added_at", userID)
+	if err != nil {
+		log.Printf("[Stock.Watchlist] GET error: %v", err)
+		jsonResponse(w, map[string]string{"error": "조회 실패"}, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type watchItem struct {
+		Code   string `json:"code"`
+		Name   string `json:"name"`
+		Market string `json:"market"`
+	}
+	items := []watchItem{}
+	for rows.Next() {
+		var item watchItem
+		if err := rows.Scan(&item.Code, &item.Name, &item.Market); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	jsonResponse(w, map[string]any{"stocks": items}, http.StatusOK)
+}
+
+// POST /api/stock/watchlist
+// body: {"code": "005930", "name": "삼성전자", "market": "KOSPI"}
+func (h *StockHandler) AddToWatchlist(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	var req struct {
+		Code   string `json:"code"`
+		Name   string `json:"name"`
+		Market string `json:"market"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" || req.Name == "" {
+		jsonResponse(w, map[string]string{"error": "code and name required"}, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.db.Exec(`
+		INSERT INTO stock_watchlist (user_id, code, name, market)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_id, code) DO UPDATE SET name = $3, market = $4
+	`, userID, req.Code, req.Name, req.Market)
+	if err != nil {
+		log.Printf("[Stock.Watchlist] ADD error: %v", err)
+		jsonResponse(w, map[string]string{"error": "저장 실패"}, http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"ok": "1"}, http.StatusOK)
+}
+
+// DELETE /api/stock/watchlist
+// body: {"code": "005930"}
+func (h *StockHandler) RemoveFromWatchlist(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := h.resolveUserID(r)
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+		jsonResponse(w, map[string]string{"error": "code required"}, http.StatusBadRequest)
+		return
+	}
+
+	h.db.Exec("DELETE FROM stock_watchlist WHERE user_id = $1 AND code = $2", userID, req.Code)
+	jsonResponse(w, map[string]string{"ok": "1"}, http.StatusOK)
+}
+
+// POST /api/stock/price
+// body (국내): {"code": "005930", "market": "KOSPI"|"KOSDAQ"}
+// body (해외): {"code": "AAPL",   "market": "overseas:NAS"}
+// market은 검색 결과의 market 필드를 그대로 전달한다.
 func (h *StockHandler) Price(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -416,9 +553,11 @@ func (h *StockHandler) Price(w http.ResponseWriter, r *http.Request) {
 
 	var path, trID string
 	if excd, ok := strings.CutPrefix(req.Market, "overseas:"); ok {
+		// 해외: HHDFS00000300
 		path = fmt.Sprintf("/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=%s&SYMB=%s", excd, req.Code)
 		trID = "HHDFS00000300"
 	} else {
+		// 국내: FHKST01010100 (KOSPI=J, KOSDAQ=Q)
 		mrktDiv := "J"
 		if req.Market == "KOSDAQ" {
 			mrktDiv = "Q"

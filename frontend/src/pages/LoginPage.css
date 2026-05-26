@@ -1,0 +1,252 @@
+.lp-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0e1117;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  overflow-y: auto;
+  padding: 20px 0;
+}
+
+.lp-card {
+  background: #1a1d2e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 36px 32px;
+  width: 400px;
+  max-width: 94vw;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  margin: auto;
+}
+
+.lp-logo {
+  color: #e6e4e4;
+  text-align: center;
+  font-size: 36px;
+  margin-bottom: 6px;
+
+  span {
+    display: inline-block;
+    background-color: #273851;
+    margin: 15px;
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    font-size: 26pt;
+  }
+}
+
+.lp-title {
+  text-align: center;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 24px;
+}
+
+.lp-tabs {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+}
+
+.lp-tab {
+  flex: 1;
+  padding: 9px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.lp-tab.active {
+  background: rgba(99, 179, 237, 0.18);
+  color: #63b3ed;
+  font-weight: 600;
+}
+
+/* Fields */
+.lp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.lp-field label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lp-field input {
+  padding: 9px 11px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.lp-field input:focus { border-color: rgba(99, 179, 237, 0.5); }
+.lp-field input::placeholder { color: rgba(255, 255, 255, 0.2); }
+.lp-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 인증 수단 선택 탭 */
+.lp-method-tabs {
+  display: flex;
+  gap: 8px;
+}
+.lp-method-tab {
+  flex: 1;
+  padding: 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lp-method-tab.active {
+  border-color: rgba(99, 179, 237, 0.5);
+  background: rgba(99, 179, 237, 0.12);
+  color: #63b3ed;
+  font-weight: 600;
+}
+.lp-method-tab:not(.active):hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Input + button row */
+.lp-input-row {
+  display: flex;
+  gap: 6px;
+}
+.lp-input-row input { flex: 1; }
+
+.lp-code-row { margin-top: 6px; }
+
+.lp-verify-btn {
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(99, 179, 237, 0.45);
+  background: rgba(99, 179, 237, 0.1);
+  color: #63b3ed;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.lp-verify-btn:hover:not(:disabled) { background: rgba(99, 179, 237, 0.2); }
+.lp-verify-btn:disabled { opacity: 0.4; cursor: default; }
+
+.lp-verify-confirm {
+  border-color: rgba(104, 211, 145, 0.45);
+  background: rgba(104, 211, 145, 0.08);
+  color: #68d391;
+}
+.lp-verify-confirm:hover:not(:disabled) { background: rgba(104, 211, 145, 0.18); }
+
+/* Verified badge */
+.lp-verified-badge {
+  font-size: 11px;
+  color: #68d391;
+  font-weight: 600;
+}
+
+/* Per-field error */
+.lp-field-error {
+  font-size: 11px;
+  color: #fc8181;
+  margin: 0;
+}
+
+/* Info message (e.g. "발송했습니다") */
+.lp-field-msg { font-size: 11px; margin: 0; }
+.lp-msg-ok    { color: #68d391; }
+
+/* Password hints */
+.lp-pw-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.lp-hint-ok, .lp-hint-no {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.lp-hint-ok { color: #68d391; background: rgba(104, 211, 145, 0.1); }
+.lp-hint-no { color: rgba(255, 255, 255, 0.3); background: rgba(255,255,255,0.04); }
+
+/* Global error */
+.lp-error {
+  font-size: 13px;
+  color: #fc8181;
+  margin: 4px 0 10px;
+  min-height: 18px;
+}
+
+/* Submit */
+.lp-submit {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  border: none;
+  background: #63b3ed;
+  color: #0e1117;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 4px;
+}
+.lp-submit:hover:not(:disabled) { background: #90cdf4; }
+.lp-submit:disabled { opacity: 0.45; cursor: default; }
+
+/* Divider */
+.lp-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+}
+.lp-divider::before,
+.lp-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Guest button */
+.lp-guest-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.lp-guest-btn:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.8);
+}

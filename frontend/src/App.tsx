@@ -4,8 +4,11 @@ import ChatWidget from './ChatWidget';
 import WorkReport from './pages/WorkReport';
 import SalaryReport from './pages/SalaryReport';
 import StockBanner from './components/StockBanner';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginPage from './pages/LoginPage';
 
 type Page = 'home' | 'work' | 'salary';
+type RequiredRole = 'all' | 'user' | 'admin';
 
 interface MenuItem {
   name: string;
@@ -13,17 +16,19 @@ interface MenuItem {
   action: 'navigate' | 'link' | 'newWindow';
   page?: Page;
   href?: string;
+  requiredRole: RequiredRole;
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { name: '홈',       icon: 'mdi-home-outline',              action: 'navigate', page: 'home' },
-  { name: '소개',     icon: 'mdi-account-question-outline',   action: 'link',     href: '#about' },
-  { name: '연락',     icon: 'mdi-email-fast-outline',         action: 'link',     href: '#contact' },
-  { name: '업무일지', icon: 'mdi-briefcase-outline',           action: 'navigate', page: 'work' },
-  { name: '급여명세서',icon: 'mdi-calendar-month-outline',     action: 'navigate', page: 'salary' },
+  { name: '홈',        icon: 'mdi-home-outline',            action: 'navigate', page: 'home',   requiredRole: 'all'   },
+  { name: '소개',      icon: 'mdi-account-question-outline', action: 'link',     href: '#about', requiredRole: 'all'   },
+  { name: '연락',      icon: 'mdi-email-fast-outline',       action: 'link',     href: '#contact', requiredRole: 'all' },
+  { name: '업무일지',  icon: 'mdi-briefcase-outline',        action: 'navigate', page: 'work',   requiredRole: 'user'  },
+  { name: '급여명세서', icon: 'mdi-calendar-month-outline',  action: 'navigate', page: 'salary', requiredRole: 'admin' },
 ];
 
-export default function App() {
+function AppInner() {
+  const { user, loading, isGuest, logout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -34,6 +39,16 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  if (loading) return null;
+  if (!user && !isGuest) return <LoginPage />;
+
+  const canAccess = (item: MenuItem): boolean => {
+    if (item.requiredRole === 'all') return true;
+    if (isGuest) return false;
+    if (item.requiredRole === 'admin') return user?.role === 'admin';
+    return !!user;
+  };
+
   const closeMenu = () => setShowMenu(false);
 
   const navigate = (page: Page) => {
@@ -43,6 +58,7 @@ export default function App() {
   };
 
   const handleMenuItemClick = (item: MenuItem) => {
+    if (!canAccess(item)) return;
     if (item.action === 'navigate' && item.page) {
       navigate(item.page);
     } else if (item.action === 'link' && item.href) {
@@ -56,76 +72,84 @@ export default function App() {
     }
   };
 
+  const roleLabel: Record<RequiredRole, string> = {
+    all: '',
+    user: '(로그인 필요)',
+    admin: '(관리자 전용)',
+  };
+
   return (
     <div className="app">
-      {/* 헤더: 메뉴가 열려 있으면 스크롤과 무관하게 표시 */}
       <header className={`header ${isScrolled && !showMenu ? 'hidden' : ''}`}>
         <div className="header-content">
-          <button className="menu-btn" onClick={() => setShowMenu(prev => !prev)}>
-            ≡
-          </button>
+          <button className="menu-btn" onClick={() => setShowMenu(prev => !prev)}>≡</button>
           <div className="logo">
             <span className="logo-icon" onClick={() => navigate('home')}>
               <img src="https://avatars.githubusercontent.com/u/96821067?v=4" alt="Chat❓Chat❗" />
             </span>
           </div>
-          <StockBanner />
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <StockBanner />
+            <button
+              className="sb-ctrl-btn"
+              onClick={logout}
+              title={isGuest ? '로그인하기' : `로그아웃 (${user?.username})`}
+              style={{ fontSize: 16 }}
+            >
+              {isGuest ? '🔑' : '👤'}
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* 메뉴 backdrop + 드롭다운 */}
       {showMenu && (
         <>
           <div className="menu-backdrop" onClick={closeMenu} />
           <div className="menu-dropdown">
             <ul className="menu-list">
-              {MENU_ITEMS.map((item, i) => (
-                <li key={i} className="menu-item" onClick={() => handleMenuItemClick(item)}>
-                  <span className={`menu-icon-btn mdi ${item.icon}`} />
-                  <span className="alpha-text">{item.name}</span>
-                </li>
-              ))}
+              {MENU_ITEMS.map((item, i) => {
+                const accessible = canAccess(item);
+                return (
+                  <li
+                    key={i}
+                    className={`menu-item ${!accessible ? 'menu-item-locked' : ''}`}
+                    onClick={() => handleMenuItemClick(item)}
+                    title={!accessible ? roleLabel[item.requiredRole] : undefined}
+                  >
+                    <span className={`menu-icon-btn mdi ${item.icon}`} />
+                    <span className="alpha-text">{item.name}</span>
+                    {!accessible && <span className="menu-lock">🔒</span>}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </>
       )}
 
-      {/* 메인 콘텐츠 */}
       <main className="main-content">
         {currentPage === 'home' && <div className="home-placeholder" />}
-        {currentPage === 'work' && <WorkReport />}
-        {currentPage === 'salary' && <SalaryReport />}
+        {currentPage === 'work' && (user ? <WorkReport /> : null)}
+        {currentPage === 'salary' && (user?.role === 'admin' ? <SalaryReport /> : null)}
       </main>
 
-      {/* 스크롤 시 나타나는 플로팅 버튼 (z-index > backdrop) */}
       {isScrolled && (
         <>
-          <button
-            className="floating-btn menu-floating"
-            onClick={() => setShowMenu(prev => !prev)}
-            title="메뉴"
-          >
-            ≡
-          </button>
-          <button
-            className="floating-btn home-floating"
-            onClick={() => navigate('home')}
-            title="홈으로"
-          >
-            🏠
-          </button>
-          <button
-            className="floating-btn top-floating"
-            onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-            title="최상위로"
-          >
-            ↑
-          </button>
+          <button className="floating-btn menu-floating" onClick={() => setShowMenu(prev => !prev)} title="메뉴">≡</button>
+          <button className="floating-btn home-floating" onClick={() => navigate('home')} title="홈으로">🏠</button>
+          <button className="floating-btn top-floating" onClick={() => { closeMenu(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} title="최상위로">↑</button>
         </>
       )}
 
-      {/* 챗봇 위젯 */}
       <ChatWidget />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }

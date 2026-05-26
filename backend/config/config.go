@@ -17,6 +17,12 @@ type Config struct {
 	SalaryDir      string
 	KISAppKey      string
 	KISAppSecret   string
+	JWTSecret      string
+	SMTPHost       string
+	SMTPPort       string
+	SMTPFrom       string
+	SMTPUser       string
+	SMTPPass       string
 }
 
 func Load() *Config {
@@ -36,6 +42,12 @@ func Load() *Config {
 		SalaryDir:      getEnvOrDefault("SALARY_DIR", "./salary_data"),
 		KISAppKey:      os.Getenv("KIS_APP_KEY"),
 		KISAppSecret:   os.Getenv("KIS_APP_SECRET"),
+		JWTSecret:      getEnvOrDefault("JWT_SECRET", "change-me-in-production"),
+		SMTPHost:       os.Getenv("SMTP_HOST"),
+		SMTPPort:       getEnvOrDefault("SMTP_PORT", "587"),
+		SMTPFrom:       os.Getenv("SMTP_FROM"),
+		SMTPUser:       os.Getenv("SMTP_USER"),
+		SMTPPass:       os.Getenv("SMTP_PASS"),
 	}
 
 	log.Printf("📝 DATABASE_URL: %s", cfg.DatabaseURL)

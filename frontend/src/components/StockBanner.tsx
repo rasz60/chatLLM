@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './StockBanner.css';
+import { useAuth } from '../contexts/AuthContext';
 
 interface StockItem {
   code: string;
@@ -25,17 +26,16 @@ const KIS_EXCHANGE_NAMES: Record<string, string> = {
   TSE: '도쿄', HKS: '홍콩', SHS: '상해', SZS: '심천',
 };
 
+const POLL_MS = 1000;
+
 function marketDisplay(market: string): string {
   if (!market) return '';
   const code = market.startsWith('overseas:') ? market.split(':')[1] : market;
   return KIS_EXCHANGE_NAMES[code] ?? code;
 }
 
-const STORAGE_KEY = 'watchlist_stocks';
-const POLL_MS = 30000;
-
 function formatPrice(price: string): string {
-  const n = parseInt(price, 10);
+  const n = parseFloat(price);
   return isNaN(n) ? price : n.toLocaleString('ko-KR');
 }
 
@@ -51,22 +51,61 @@ function signArrow(sign: string): string {
   return '━';
 }
 
+function computeDisplay(p: PriceData, refPrice?: number): { rate: string; sign: string } {
+  if (refPrice && refPrice > 0) {
+    const current = parseFloat(p.price);
+    if (!isNaN(current) && current > 0) {
+      const pct = (current - refPrice) / refPrice * 100;
+      const sign = pct > 0.005 ? '2' : pct < -0.005 ? '5' : '3';
+      return { rate: Math.abs(pct).toFixed(2), sign };
+    }
+  }
+  return { rate: p.rate, sign: p.sign };
+}
+
 export default function StockBanner() {
+  const { authFetch } = useAuth();
   const [minimized, setMinimized] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [stocks, setStocks] = useState<StockItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-  });
+  const [stocks, setStocks] = useState<StockItem[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
+  const [refPrices, setRefPrices] = useState<Record<string, number>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // 관심종목 초기 로드
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stocks));
-  }, [stocks]);
+    authFetch('/api/stock/watchlist')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.stocks)) setStocks(d.stocks); })
+      .catch(() => {});
+  }, [authFetch]);
 
+  // 기준가 초기 로드
+  useEffect(() => {
+    authFetch('/api/stock/refprice')
+      .then(r => r.json())
+      .then(d => { if (d.data) setRefPrices(d.data); })
+      .catch(() => {});
+  }, [authFetch]);
+
+  // 배너 슬라이드: 3초마다 다음 종목으로 전환
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [stocks.length]);
+
+  useEffect(() => {
+    if (stocks.length <= 1) return;
+    const id = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % stocks.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [stocks.length]);
+
+  // 가격 1초 갱신
   const fetchPrices = useCallback(async () => {
     if (stocks.length === 0) return;
     const updates: Record<string, PriceData> = {};
@@ -81,8 +120,6 @@ export default function StockBanner() {
         if (data.output) {
           const o = data.output;
           updates[s.code] = {
-            // 국내: stck_prpr / prdy_vrss / prdy_ctrt / prdy_vrss_sign
-            // 해외: last / diff / rate / sign
             price:  o.stck_prpr || o.last  || '-',
             change: o.prdy_vrss || o.diff  || '0',
             rate:   o.prdy_ctrt || o.rate  || '0.00',
@@ -100,6 +137,7 @@ export default function StockBanner() {
     return () => clearInterval(id);
   }, [fetchPrices]);
 
+  // 종목 검색 디바운스
   useEffect(() => {
     clearTimeout(debounceRef.current);
     if (!query.trim()) { setResults([]); return; }
@@ -112,11 +150,7 @@ export default function StockBanner() {
           body: JSON.stringify({ query: query.trim() }),
         });
         const data = await res.json();
-        if (Array.isArray(data.output) && data.output.length > 0) {
-          setResults(data.output);
-        } else {
-          setResults([]);
-        }
+        setResults(Array.isArray(data.output) && data.output.length > 0 ? data.output : []);
       } catch { setResults([]); }
       finally { setSearching(false); }
     }, 500);
@@ -124,9 +158,14 @@ export default function StockBanner() {
   }, [query]);
 
   const addStock = (r: SearchResult) => {
-    if (!stocks.find(s => s.code === r.pdno)) {
-      setStocks(prev => [...prev, { code: r.pdno, name: r.prdt_name, market: r.market ?? '' }]);
-    }
+    if (stocks.find(s => s.code === r.pdno)) { setQuery(''); setResults([]); return; }
+    const item: StockItem = { code: r.pdno, name: r.prdt_name, market: r.market ?? '' };
+    setStocks(prev => [...prev, item]);
+    authFetch('/api/stock/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    }).catch(() => {});
     setQuery('');
     setResults([]);
   };
@@ -134,6 +173,37 @@ export default function StockBanner() {
   const removeStock = (code: string) => {
     setStocks(prev => prev.filter(s => s.code !== code));
     setPrices(prev => { const n = { ...prev }; delete n[code]; return n; });
+    authFetch('/api/stock/watchlist', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    }).catch(() => {});
+    authFetch('/api/stock/refprice', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    }).catch(() => {});
+    setRefPrices(prev => { const n = { ...prev }; delete n[code]; return n; });
+  };
+
+  const handleRefPriceChange = (code: string, value: string) => {
+    if (value === '') {
+      authFetch('/api/stock/refprice', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      }).catch(() => {});
+      setRefPrices(prev => { const n = { ...prev }; delete n[code]; return n; });
+    } else {
+      const price = parseFloat(value);
+      if (isNaN(price) || price <= 0) return;
+      authFetch('/api/stock/refprice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, ref_price: price }),
+      }).catch(() => {});
+      setRefPrices(prev => ({ ...prev, [code]: price }));
+    }
   };
 
   if (minimized) {
@@ -151,25 +221,26 @@ export default function StockBanner() {
           <span className="sb-empty" onClick={() => setShowModal(true)}>
             선택된 종목이 없습니다.
           </span>
-        ) : (
-          <div className="sb-stocks">
-            {stocks.map(s => {
-              const p = prices[s.code];
-              const cls = p ? signClass(p.sign) : '';
-              return (
-                <div key={s.code} className={`sb-stock-item ${cls}`} onClick={() => setShowModal(true)}>
-                  <span className="sb-name">{s.name}</span>
-                  <span className="sb-price">{p ? formatPrice(p.price) : '─'}</span>
-                  {p && (
-                    <span className="sb-rate">
-                      {signArrow(p.sign)}{Math.abs(parseFloat(p.rate)).toFixed(2)}%
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        ) : (() => {
+          const s = stocks[currentIndex] ?? stocks[0];
+          const p = prices[s.code];
+          const disp = p ? computeDisplay(p, refPrices[s.code]) : null;
+          const cls = disp ? signClass(disp.sign) : '';
+          return (
+            <div className="sb-stocks">
+              <div key={currentIndex} className={`sb-stock-item sb-stock-slide ${cls}`} onClick={() => setShowModal(true)}>
+                <span className="sb-name">{s.name}</span>
+                <span className="sb-price">{p ? formatPrice(p.price) : '─'}</span>
+                {disp && (
+                  <span className="sb-rate">
+                    {refPrices[s.code] && <span className="sb-ref-dot" title="기준가 설정됨">●</span>}
+                    {signArrow(disp.sign)}{parseFloat(disp.rate).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="sb-controls">
           <button className="sb-ctrl-btn" onClick={() => setShowModal(true)} title="종목 설정">⚙</button>
@@ -193,7 +264,7 @@ export default function StockBanner() {
                   <input
                     type="text"
                     className="sb-search-input"
-                    placeholder="종목코드·이름 (005930, 삼성, AAPL, Apple)"
+                    placeholder="종목명·코드 (삼성전자, 005930, Apple, AAPL)"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     autoFocus
@@ -202,7 +273,7 @@ export default function StockBanner() {
                 </div>
                 <div className="sb-results">
                   {!query.trim() && (
-                    <p className="sb-hint-msg">국내: 종목코드·한글명<br />해외: 티커·영문명 입력</p>
+                    <p className="sb-hint-msg">국내: 종목명·코드 (삼성전자, 005930)<br />해외: 티커·영문명 (AAPL, Apple)</p>
                   )}
                   {query.trim() && !searching && results.length === 0 && (
                     <p className="sb-hint-msg">검색 결과가 없습니다.</p>
@@ -227,9 +298,24 @@ export default function StockBanner() {
                     <p className="sb-hint-msg">선택된 종목이 없습니다.</p>
                   ) : stocks.map(s => (
                     <div key={s.code} className="sb-selected-row">
-                      <span className="sb-selected-name">{s.name}</span>
-                      <span className="sb-selected-code">{s.code}</span>
-                      <button className="sb-remove" onClick={() => removeStock(s.code)}>✕</button>
+                      <div className="sb-selected-top">
+                        <span className="sb-selected-name">{s.name}</span>
+                        <button className="sb-remove" onClick={() => removeStock(s.code)}>✕</button>
+                      </div>
+                      <div className="sb-selected-bottom">
+                        <span className="sb-selected-code">{s.code}</span>
+                        <div className="sb-ref-wrap">
+                          <span className="sb-ref-label">기준가</span>
+                          <input
+                            type="number"
+                            className="sb-ref-input"
+                            placeholder="전날 종가"
+                            value={refPrices[s.code] ?? ''}
+                            min={0}
+                            onChange={e => handleRefPriceChange(s.code, e.target.value)}
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/chatwidget.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/stockbanner.tsx","./src/pages/salaryreport.tsx","./src/pages/workreport.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/chatwidget.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/stockbanner.tsx","./src/contexts/authcontext.tsx","./src/pages/loginpage.tsx","./src/pages/salaryreport.tsx","./src/pages/workreport.tsx"],"version":"5.9.3"}

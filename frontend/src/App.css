@@ -38,6 +38,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
 }
 
 .menu-btn {
@@ -56,10 +57,12 @@ body {
 }
 
 .logo {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: center;
   align-items: center;
+  pointer-events: auto;
 }
 
 .logo-icon {
@@ -186,6 +189,20 @@ body {
 .menu-item:hover .alpha-text {
   background: #333;
   color: white;
+}
+
+.menu-item-locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.menu-item-locked:hover .menu-icon-btn,
+.menu-item-locked:hover .alpha-text {
+  background: transparent;
+  color: inherit;
+}
+.menu-lock {
+  margin-left: auto;
+  font-size: 12px;
 }
 
 /* ==================== 메인 콘텐츠 (원본 그대로) ==================== */
