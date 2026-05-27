@@ -94,7 +94,8 @@
 .sb-modal {
   background: #1a1d2e;
   border-radius: 12px;
-  width: 580px;
+  width: 60vw;
+  height: 60vh;
   max-width: 92vw;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
   overflow: hidden;
@@ -123,7 +124,7 @@
 
 .sb-modal-body {
   display: flex;
-  height: 320px;
+  height: 100%;
 }
 
 /* 좌: 검색 */

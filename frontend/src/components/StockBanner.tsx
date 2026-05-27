@@ -305,7 +305,7 @@ export default function StockBanner() {
                       <div className="sb-selected-bottom">
                         <span className="sb-selected-code">{s.code}</span>
                         <div className="sb-ref-wrap">
-                          <span className="sb-ref-label">기준가</span>
+                          <span className="sb-ref-label">매입단가</span>
                           <input
                             type="number"
                             className="sb-ref-input"
